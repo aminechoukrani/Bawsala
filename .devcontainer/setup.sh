@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+echo "Installation de MariaDB..."
+sudo apt-get update
+sudo apt-get install -y mariadb-server
+
 echo "Démarrage de MariaDB..."
 sudo service mariadb start
 
