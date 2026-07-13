@@ -1,9 +1,6 @@
 {
-  "name": "gestiplateforme-dev",
+  "name": "bawsala-dev",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
-  "features": {
-    "ghcr.io/devcontainers-contrib/features/mariadb-server:1": {}
-  },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "sudo service mariadb start",
   "forwardPorts": [3000, 3306],
