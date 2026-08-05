@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Évaluations</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-filter icone"></i>Filtres</h4>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <input id="filtre-recherche" class="champ-bawsala" placeholder="Rechercher un titre..." style="flex:2;">
+        <select id="filtre-classe" class="champ-bawsala" style="flex:1;">
+          <option value="">Toutes les classes</option>
+        </select>
+        <select id="filtre-temporel" class="champ-bawsala" style="flex:1;">
+          <option value="">Tous les statuts</option>
+          <option value="a_venir">À venir</option>
+          <option value="en_cours">En cours</option>
+          <option value="termine">Terminé</option>
+        </select>
+        <select id="filtre-correction" class="champ-bawsala" style="flex:1;">
+          <option value="">Toute correction</option>
+          <option value="a_corriger">À corriger</option>
+          <option value="corrige">Entièrement corrigé</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-clipboard-list icone"></i>Toutes mes évaluations</h4>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Titre</th><th>Classe</th><th>Début</th><th>Durée</th><th>Statut</th><th>Copies / Notes</th><th></th></tr></thead>
+        <tbody id="liste-evaluations"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('enseignant');
+    injecterCoquille({ role: 'enseignant', pageActuelle: '/tableau-evaluations.html', titre: 'Évaluations' });
+
+    const erreurDiv = document.getElementById('erreur');
+    let toutesEvaluations = [];
+
+    function statutTemporelDe(evaluation) {
+      const debut = new Date(evaluation.date_evaluation).getTime();
+      const fin = debut + evaluation.duree_minutes * 60000;
+      const maintenant = Date.now();
+      return maintenant < debut ? 'a_venir' : (maintenant > fin ? 'termine' : 'en_cours');
+    }
+
+    const LIBELLES_STATUT = {
+      a_venir: { texte: 'À venir', classe: 'badge-attente' },
+      en_cours: { texte: 'En cours', classe: 'badge-confirme' },
+      termine: { texte: 'Terminé', classe: 'badge-refuse' }
+    };
+
+    async function chargerEvaluations() {
+      try {
+        toutesEvaluations = await appelApi('/evaluations/mes-evaluations');
+
+        const classesUniques = [...new Map(toutesEvaluations.map(e => [e.classe_id, e.classe_nom])).entries()];
+        document.getElementById('filtre-classe').innerHTML = '<option value="">Toutes les classes</option>' +
+          classesUniques.map(([id, nom]) => `<option value="${id}">${nom}</option>`).join('');
+
+        appliquerFiltres();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    function appliquerFiltres() {
+      const recherche = document.getElementById('filtre-recherche').value.toLowerCase();
+      const classeId = document.getElementById('filtre-classe').value;
+      const statutTemporel = document.getElementById('filtre-temporel').value;
+      const correction = document.getElementById('filtre-correction').value;
+
+      const filtrees = toutesEvaluations.filter(e => {
+        if (recherche && !e.titre.toLowerCase().includes(recherche)) return false;
+        if (classeId && String(e.classe_id) !== classeId) return false;
+        if (statutTemporel && statutTemporelDe(e) !== statutTemporel) return false;
+        if (correction === 'a_corriger' && !(e.nb_copies > e.nb_notes_publiees)) return false;
+        if (correction === 'corrige' && !(e.nb_copies > 0 && e.nb_copies === e.nb_notes_publiees)) return false;
+        return true;
+      });
+
+      document.getElementById('liste-evaluations').innerHTML = filtrees.map(e => {
+        const statut = LIBELLES_STATUT[statutTemporelDe(e)];
+        return `
+          <tr>
+            <td>${e.titre}</td>
+            <td>${e.classe_nom}</td>
+            <td>${new Date(e.date_evaluation).toLocaleString('fr-FR')}</td>
+            <td>${e.duree_minutes} min</td>
+            <td><span class="badge-statut ${statut.classe}">${statut.texte}</span></td>
+            <td class="donnee-mono">${e.nb_notes_publiees} / ${e.nb_copies}</td>
+            <td><a href="/gestion-evaluations.html?classe_id=${e.classe_id}&eval_id=${e.id}" class="bouton-discret" style="text-decoration:none;"><i class="ti ti-settings"></i>Gérer</a></td>
+          </tr>
+        `;
+      }).join('') || '<tr><td colspan="7" style="color:var(--texte-doux)">Aucune évaluation ne correspond aux filtres</td></tr>';
+    }
+
+    ['filtre-recherche', 'filtre-classe', 'filtre-temporel', 'filtre-correction'].forEach(id => {
+      document.getElementById(id).addEventListener('input', appliquerFiltres);
+    });
+
+    chargerEvaluations();
+  </script>
+</body>
+</html>

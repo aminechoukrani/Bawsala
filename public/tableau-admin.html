@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Admin</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .rangee-actions { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .rangee-actions .groupe { flex: 1; min-width: 140px; }
+    .rangee-actions label { font-size: 0.78rem; color: var(--texte-doux); display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Demandes de rattachement en attente</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Enseignant</th><th>Email</th><th>Demandé le</th><th></th></tr></thead>
+        <tbody id="liste-demandes"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5 style="margin-top:0;">Inviter directement un enseignant</h5>
+      <p style="color:var(--texte-doux); font-size:0.85rem;">L'enseignant doit déjà avoir un compte. L'invitation devra être acceptée par lui et confirmée par le Super Admin.</p>
+      <div id="erreur-invite" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <div id="succes-invite" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+      <div class="rangee-actions">
+        <div class="groupe"><input id="invite-email" class="champ-bawsala" placeholder="Email de l'enseignant"></div>
+        <button id="btn-inviter" class="bouton-laiton">Inviter</button>
+      </div>
+      <table class="tableau-bawsala" style="margin-top:14px;">
+        <thead><tr><th>Enseignant</th><th>Accepté par lui</th><th>Confirmé Super Admin</th></tr></thead>
+        <tbody id="liste-invitations-envoyees"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Enseignants confirmés</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Nom</th><th>Email</th><th></th></tr></thead>
+        <tbody id="liste-confirmes"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5 style="margin-top:0;">Proposer une modification (nécessite acceptation + confirmation Super Admin)</h5>
+      <div id="erreur-modif" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <div id="succes-modif" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+      <div class="rangee-actions" style="margin-bottom:12px;">
+        <div class="groupe">
+          <label>Cible</label>
+          <select id="modif-type" class="champ-bawsala">
+            <option value="enseignant_info">Infos d'un enseignant</option>
+            <option value="classe_info">Infos d'une classe</option>
+          </select>
+        </div>
+        <div class="groupe"><label>Sélectionner</label><select id="modif-cible" class="champ-bawsala"></select></div>
+      </div>
+      <div id="champs-modif-enseignant" class="rangee-actions">
+        <div class="groupe"><input id="modif-ens-nom" class="champ-bawsala" placeholder="Nouveau nom (optionnel)"></div>
+        <div class="groupe"><input id="modif-ens-email" class="champ-bawsala" placeholder="Nouvel email (optionnel)"></div>
+      </div>
+      <div id="champs-modif-classe" class="rangee-actions" style="display:none;">
+        <div class="groupe"><input id="modif-classe-nom" class="champ-bawsala" placeholder="Nouveau nom (optionnel)"></div>
+        <div class="groupe"><input id="modif-classe-annee" class="champ-bawsala" placeholder="Nouvelle année (optionnel)"></div>
+      </div>
+      <button id="btn-proposer-modif" class="bouton-laiton" style="margin-top:12px;">Proposer</button>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('admin');
+    injecterCoquille({ role: 'admin', pageActuelle: '/tableau-admin.html', titre: 'Rattachements' });
+
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+
+    async function chargerDemandes() {
+      erreurDiv.style.display = 'none';
+      try {
+        const demandes = await appelApi('/rattachements/en-attente');
+        document.getElementById('liste-demandes').innerHTML = demandes.map(d => `
+          <tr>
+            <td>${d.nom}</td><td>${d.email}</td><td>${new Date(d.created_at).toLocaleDateString('fr-FR')}</td>
+            <td>
+              <button class="bouton-laiton" onclick="traiterDemande(${d.id}, 'confirme')">Confirmer</button>
+              <button class="bouton-danger" onclick="traiterDemande(${d.id}, 'refuse')">Refuser</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucune demande en attente</td></tr>';
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function traiterDemande(id, statut) {
+      succesDiv.style.display = 'none'; erreurDiv.style.display = 'none';
+      try {
+        await appelApi(`/rattachements/${id}/statut`, { method: 'PATCH', body: JSON.stringify({ statut }) });
+        succesDiv.textContent = statut === 'confirme' ? 'Enseignant confirmé.' : 'Demande refusée.';
+        succesDiv.style.display = 'block';
+        await chargerDemandes();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function chargerConfirmes() {
+      try {
+        const confirmes = await appelApi('/rattachements/confirmes');
+        document.getElementById('liste-confirmes').innerHTML = confirmes.map(e => `
+          <tr><td>${e.nom}</td><td>${e.email}</td><td></td></tr>
+        `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucun enseignant confirmé</td></tr>';
+
+        const selectCible = document.getElementById('modif-cible');
+        selectCible.dataset.enseignants = JSON.stringify(confirmes);
+        actualiserSelectCible();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    let classesEtablissement = [];
+    async function chargerClassesEtablissement() {
+      classesEtablissement = await appelApi('/classes');
+      actualiserSelectCible();
+    }
+
+    function actualiserSelectCible() {
+      const type = document.getElementById('modif-type').value;
+      const select = document.getElementById('modif-cible');
+      if (type === 'enseignant_info') {
+        const enseignants = JSON.parse(document.getElementById('modif-cible').dataset.enseignants || '[]');
+        select.innerHTML = enseignants.map(e => `<option value="${e.enseignant_id}">${e.nom}</option>`).join('');
+        document.getElementById('champs-modif-enseignant').style.display = 'flex';
+        document.getElementById('champs-modif-classe').style.display = 'none';
+      } else {
+        select.innerHTML = classesEtablissement.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
+        document.getElementById('champs-modif-enseignant').style.display = 'none';
+        document.getElementById('champs-modif-classe').style.display = 'flex';
+      }
+    }
+    document.getElementById('modif-type').addEventListener('change', actualiserSelectCible);
+
+    async function chargerInvitationsEnvoyees() {
+      const invitations = await appelApi('/rattachements/invitations-envoyees');
+      document.getElementById('liste-invitations-envoyees').innerHTML = invitations.map(i => `
+        <tr>
+          <td>${i.nom} (${i.email})</td>
+          <td>${i.accepte_par_enseignant ? '✅' : '⏳'}</td>
+          <td>${i.confirme_par_superadmin ? '✅' : '⏳'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucune invitation en cours</td></tr>';
+    }
+
+    document.getElementById('btn-inviter').addEventListener('click', async () => {
+      const erreurInviteDiv = document.getElementById('erreur-invite');
+      const succesInviteDiv = document.getElementById('succes-invite');
+      erreurInviteDiv.style.display = 'none'; succesInviteDiv.style.display = 'none';
+      try {
+        await appelApi('/rattachements/inviter', {
+          method: 'POST',
+          body: JSON.stringify({ email: document.getElementById('invite-email').value })
+        });
+        succesInviteDiv.textContent = 'Invitation envoyée.'; succesInviteDiv.style.display = 'block';
+        document.getElementById('invite-email').value = '';
+        await chargerInvitationsEnvoyees();
+      } catch (err) { erreurInviteDiv.textContent = err.message; erreurInviteDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-proposer-modif').addEventListener('click', async () => {
+      const erreurModifDiv = document.getElementById('erreur-modif');
+      const succesModifDiv = document.getElementById('succes-modif');
+      erreurModifDiv.style.display = 'none'; succesModifDiv.style.display = 'none';
+      const type = document.getElementById('modif-type').value;
+      const cibleId = document.getElementById('modif-cible').value;
+      const donnees = type === 'enseignant_info'
+        ? { nom: document.getElementById('modif-ens-nom').value || undefined, email: document.getElementById('modif-ens-email').value || undefined }
+        : { nom: document.getElementById('modif-classe-nom').value || undefined, annee_scolaire: document.getElementById('modif-classe-annee').value || undefined };
+      try {
+        await appelApi('/modifications', {
+          method: 'POST',
+          body: JSON.stringify({ type_cible: type, cible_id: cibleId, donnees })
+        });
+        succesModifDiv.textContent = 'Proposition envoyée.'; succesModifDiv.style.display = 'block';
+      } catch (err) { erreurModifDiv.textContent = err.message; erreurModifDiv.style.display = 'block'; }
+    });
+
+    chargerDemandes();
+    chargerConfirmes();
+    chargerClassesEtablissement();
+    chargerInvitationsEnvoyees();
+  </script>
+</body>
+</html>

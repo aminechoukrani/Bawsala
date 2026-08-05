@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Cours</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .points-etapes { display:flex; gap:6px; justify-content:center; margin:16px 0; }
+    .point-etape { width:10px; height:10px; border-radius:50%; background:var(--creme-fonce); transition:all 0.2s ease; }
+    .point-etape.actif { background:var(--primaire); width:24px; border-radius:6px; }
+    .point-etape.complete { background:var(--succes); }
+    .nav-etapes { display:flex; justify-content:space-between; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+    <div class="carte-bawsala">
+      <h3 id="titre-page" style="margin-top:0;"></h3>
+
+      <div id="points-etapes" class="points-etapes" style="display:none;"></div>
+
+      <h5 id="titre-etape" style="display:none;"></h5>
+      <div id="contenu-page" style="margin-bottom:20px;"></div>
+
+      <div id="nav-etapes" class="nav-etapes" style="display:none;">
+        <button id="btn-precedent" class="bouton-discret"><i class="ti ti-arrow-left"></i><span id="texte-precedent"></span></button>
+        <button id="btn-suivant" class="bouton-laiton"><span id="texte-suivant"></span><i class="ti ti-arrow-right"></i></button>
+      </div>
+
+      <button id="btn-termine" class="bouton-laiton" style="display:none;"><i class="ti ti-check"></i><span id="texte-termine"></span></button>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('eleve');
+    injecterCoquille({ role: 'eleve', pageActuelle: '/tableau-eleve.html', titre: t('mes_cours') });
+
+    document.getElementById('texte-precedent').textContent = t('precedent');
+    document.getElementById('texte-suivant').textContent = t('suivant');
+    document.getElementById('texte-termine').textContent = t('termine');
+
+    const parametres = new URLSearchParams(window.location.search);
+    const pageId = parametres.get('page_id');
+    const classeId = parametres.get('classe_id');
+    const moduleId = parametres.get('module_id');
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+    const heureDebut = Date.now();
+
+    let etapes = null;
+    let etapeActuelle = 0;
+
+    function afficherEtapeSimple(page) {
+      const zoneContenu = document.getElementById('contenu-page');
+      zoneContenu.innerHTML = page.contenu_html;
+      executerScripts(zoneContenu);
+      document.getElementById('btn-termine').style.display = 'inline-flex';
+    }
+
+    function afficherEtape(index) {
+      etapeActuelle = index;
+      const etape = etapes[index];
+      document.getElementById('titre-etape').style.display = 'block';
+      document.getElementById('titre-etape').textContent = etape.titre;
+
+      const zoneContenu = document.getElementById('contenu-page');
+      zoneContenu.innerHTML = etape.contenu_html;
+      executerScripts(zoneContenu);
+
+      document.getElementById('points-etapes').innerHTML = etapes.map((_, i) => `
+        <div class="point-etape ${i === index ? 'actif' : ''} ${i < index ? 'complete' : ''}"></div>
+      `).join('');
+
+      document.getElementById('btn-precedent').style.display = index === 0 ? 'none' : 'inline-flex';
+      const estDerniere = index === etapes.length - 1;
+      document.getElementById('btn-suivant').style.display = estDerniere ? 'none' : 'inline-flex';
+      document.getElementById('btn-termine').style.display = estDerniere ? 'inline-flex' : 'none';
+    }
+
+    async function chargerPage() {
+      try {
+        const pageOriginale = await appelApi(`/cours/pages/${pageId}`);
+        let page = pageOriginale;
+
+        const langue = recupererLangue();
+        if (langue !== 'fr') {
+          document.getElementById('titre-page').textContent = pageOriginale.titre;
+          document.getElementById('contenu-page').innerHTML = `
+            <div style="text-align:center; padding:30px 0;">
+              ${svgBoussole(48, true)}
+              <p style="margin-top:14px; color:var(--texte-doux); font-weight:700;">${t('traduction_en_cours')}</p>
+            </div>
+          `;
+          try {
+            page = await appelApi(`/cours/pages/${pageId}/traduction/${langue}`);
+          } catch (err) { /* si la traduction échoue, on reste sur le contenu français */ }
+        }
+
+        document.getElementById('titre-page').textContent = page.titre;
+
+        if (page.format_contenu === 'etapes_json') {
+          etapes = JSON.parse(page.contenu_html);
+          document.getElementById('points-etapes').style.display = 'flex';
+          document.getElementById('nav-etapes').style.display = 'flex';
+          afficherEtape(0);
+        } else {
+          afficherEtapeSimple(page);
+        }
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    document.getElementById('btn-suivant').addEventListener('click', () => {
+      if (etapeActuelle < etapes.length - 1) afficherEtape(etapeActuelle + 1);
+    });
+    document.getElementById('btn-precedent').addEventListener('click', () => {
+      if (etapeActuelle > 0) afficherEtape(etapeActuelle - 1);
+    });
+
+    document.getElementById('btn-termine').addEventListener('click', async () => {
+      const tempsPasseSecondes = Math.round((Date.now() - heureDebut) / 1000);
+      try {
+        await appelApi(`/cours/pages/${pageId}/progression`, {
+          method: 'PATCH',
+          body: JSON.stringify({ temps_passe_secondes: tempsPasseSecondes, defi_complete: true })
+        });
+        succesDiv.innerHTML = `<i class="ti ti-confetti icone"></i>${t('progression_enregistree')}`;
+        succesDiv.style.display = 'flex';
+        await allerVersPageSuivante();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    async function allerVersPageSuivante() {
+      if (!moduleId) { setTimeout(() => window.location.href = '/tableau-eleve.html', 1200); return; }
+      try {
+        const pages = await appelApi(`/cours/modules/${moduleId}/pages`);
+        const indexActuel = pages.findIndex(p => String(p.id) === String(pageId));
+        const pageSuivante = pages[indexActuel + 1];
+        setTimeout(() => {
+          if (pageSuivante) {
+            window.location.href = `/page-eleve.html?page_id=${pageSuivante.id}&classe_id=${classeId}&module_id=${moduleId}`;
+          } else {
+            window.location.href = '/tableau-eleve.html';
+          }
+        }, 1200);
+      } catch (err) {
+        setTimeout(() => window.location.href = '/tableau-eleve.html', 1200);
+      }
+    }
+
+    async function envoyerPresence() {
+      if (!classeId) return;
+      try {
+        await appelApi('/cours/presence', {
+          method: 'POST',
+          body: JSON.stringify({ classe_id: classeId, page_id: pageId })
+        });
+      } catch (err) { /* silencieux */ }
+    }
+
+    chargerPage();
+    envoyerPresence();
+    setInterval(envoyerPresence, 20000);
+  </script>
+</body>
+</html>

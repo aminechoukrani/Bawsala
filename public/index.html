@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Connexion</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #14B8A6 0%, #7C3AED 100%);
+    }
+    .carte-connexion {
+      background: var(--blanc);
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .marque-connexion { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .marque-connexion h1 { font-size: 1.7rem; margin: 0; color: var(--primaire-fonce); }
+    .marque-connexion p { color: var(--texte-doux); font-size: 0.85rem; margin: 0; font-weight: 700; }
+    label { font-size: 0.85rem; font-weight: 800; color: var(--texte-doux); margin-bottom: 6px; display: block; }
+    .groupe-champ { margin-bottom: 16px; }
+    @keyframes secousse {
+      10%, 90% { transform: translateX(-2px); }
+      20%, 80% { transform: translateX(4px); }
+      30%, 50%, 70% { transform: translateX(-8px); }
+      40%, 60% { transform: translateX(8px); }
+    }
+    .secoue { animation: secousse 0.5s; border-color: var(--alerte) !important; }
+    .lien-inscription { text-align: center; margin-top: 20px; font-size: 0.85rem; color: var(--texte-doux); font-weight: 700; }
+    .lien-inscription a { color: var(--accent); text-decoration: none; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <div class="carte-connexion">
+    <div class="marque-connexion"></div>
+
+    <div class="groupe-champ">
+      <label><i class="ti ti-id-badge-2 icone"></i>Identifiant</label>
+      <input type="text" id="identifiant" class="champ-bawsala" placeholder="Email ou code Massar" autocomplete="off">
+    </div>
+
+    <div class="groupe-champ" id="zone-secret" style="display:none;">
+      <label id="label-secret"><i class="ti ti-lock icone"></i>Mot de passe</label>
+      <input type="password" id="secret-mdp" class="champ-bawsala" placeholder="Mot de passe">
+      <input type="date" id="secret-date" class="champ-bawsala" style="display:none;">
+    </div>
+
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="chargement" style="display:none; text-align:center;"></div>
+
+    <p class="lien-inscription">Pas encore de compte enseignant ? <a href="/inscription-enseignant.html">S'inscrire</a></p>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    document.querySelector('.marque-connexion').innerHTML = svgBoussole(52) + '<h1>Bawsala</h1><p>Suivre le parcours, à chaque étape</p>';
+
+    const champIdentifiant = document.getElementById('identifiant');
+    const zoneSecret = document.getElementById('zone-secret');
+    const champSecretMdp = document.getElementById('secret-mdp');
+    const champSecretDate = document.getElementById('secret-date');
+    const labelSecret = document.getElementById('label-secret');
+    const erreurDiv = document.getElementById('erreur');
+    const chargementDiv = document.getElementById('chargement');
+
+    let minuteurDebounce = null;
+    let enCoursDeConnexion = false;
+
+    function estEmail(valeur) { return valeur.includes('@'); }
+
+    champIdentifiant.addEventListener('input', () => {
+      const valeur = champIdentifiant.value.trim();
+      erreurDiv.style.display = 'none';
+      if (valeur.length === 0) { zoneSecret.style.display = 'none'; return; }
+      zoneSecret.style.display = 'block';
+      if (estEmail(valeur)) {
+        labelSecret.innerHTML = '<i class="ti ti-lock icone"></i>Mot de passe';
+        champSecretMdp.style.display = 'block';
+        champSecretDate.style.display = 'none';
+      } else {
+        labelSecret.innerHTML = '<i class="ti ti-cake icone"></i>Date de naissance';
+        champSecretMdp.style.display = 'none';
+        champSecretDate.style.display = 'block';
+      }
+    });
+
+    async function tenterConnexion(secret) {
+      if (enCoursDeConnexion || !secret) return;
+      enCoursDeConnexion = true;
+      erreurDiv.style.display = 'none';
+      chargementDiv.style.display = 'block';
+      chargementDiv.innerHTML = svgBoussole(24, true);
+
+      try {
+        const donnees = await appelApi('/auth/connexion', {
+          method: 'POST',
+          body: JSON.stringify({ identifiant: champIdentifiant.value.trim(), secret })
+        });
+        sauvegarderSession(donnees.token, donnees.utilisateur);
+        window.location.href = `/tableau-${donnees.utilisateur.role.replace('_', '-')}.html`;
+      } catch (err) {
+        chargementDiv.style.display = 'none';
+        erreurDiv.innerHTML = '<i class="ti ti-alert-triangle icone"></i>' + err.message;
+        erreurDiv.style.display = 'flex';
+        [champSecretMdp, champSecretDate].forEach(champ => {
+          champ.classList.add('secoue');
+          setTimeout(() => champ.classList.remove('secoue'), 500);
+        });
+        champSecretMdp.value = '';
+        enCoursDeConnexion = false;
+      }
+    }
+
+    champSecretMdp.addEventListener('input', () => {
+      clearTimeout(minuteurDebounce);
+      if (champSecretMdp.value.length >= 4) {
+        minuteurDebounce = setTimeout(() => tenterConnexion(champSecretMdp.value), 700);
+      }
+    });
+    champSecretMdp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { clearTimeout(minuteurDebounce); tenterConnexion(champSecretMdp.value); }
+    });
+    champSecretDate.addEventListener('change', () => {
+      if (champSecretDate.value) tenterConnexion(champSecretDate.value);
+    });
+  </script>
+</body>
+</html>

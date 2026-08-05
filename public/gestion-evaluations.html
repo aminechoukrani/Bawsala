@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Évaluations</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-clipboard-list icone"></i>Mes évaluations (DS)</h4>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Titre</th><th>Début</th><th>Durée</th><th></th></tr></thead>
+        <tbody id="liste-evaluations"></tbody>
+      </table>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <input id="eval-titre" class="champ-bawsala" placeholder="Titre du DS" style="flex:2;">
+        <input id="eval-date" type="datetime-local" class="champ-bawsala" style="flex:1;">
+        <input id="eval-duree" type="number" class="champ-bawsala" placeholder="Durée (min)" style="flex:1;">
+        <button id="btn-creer-eval" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-plus"></i>Créer</button>
+      </div>
+    </div>
+
+    <div id="carte-timing" class="carte-bawsala" style="display:none;">
+      <h5><i class="ti ti-clock-edit icone"></i>Modifier le timing — <span id="titre-timing"></span></h5>
+      <p style="color:var(--texte-doux); font-size:0.85rem;">Modifie l'heure de début ou la durée (utile pour un retard, une prolongation, ou un dépannage).</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <input id="timing-date" type="datetime-local" class="champ-bawsala" style="flex:1;">
+        <input id="timing-duree" type="number" class="champ-bawsala" placeholder="Durée (min)" style="flex:1;">
+        <button id="btn-enregistrer-timing" class="bouton-laiton"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </div>
+
+    <div id="section-questions" style="display:none;">
+      <div class="carte-bawsala">
+        <h5><i class="ti ti-list-check icone"></i>Questions — <span id="titre-eval-selectionnee"></span></h5>
+        <table class="tableau-bawsala">
+          <thead><tr><th>Énoncé</th><th>Type</th><th></th></tr></thead>
+          <tbody id="liste-questions"></tbody>
+        </table>
+
+        <div style="margin-top:16px;">
+          <select id="question-type" class="champ-bawsala" style="margin-bottom:8px;">
+            <option value="qcm">QCM</option>
+            <option value="texte_libre">Réponse libre</option>
+            <option value="code">Code à écrire/compléter</option>
+          </select>
+          <textarea id="question-enonce" class="champ-bawsala" rows="2" placeholder="Énoncé de la question" style="margin-bottom:8px;"></textarea>
+
+          <div id="champs-qcm">
+            <input id="qcm-option-0" class="champ-bawsala" placeholder="Option 1" style="margin-bottom:6px;">
+            <input id="qcm-option-1" class="champ-bawsala" placeholder="Option 2" style="margin-bottom:6px;">
+            <input id="qcm-option-2" class="champ-bawsala" placeholder="Option 3 (optionnel)" style="margin-bottom:6px;">
+            <input id="qcm-option-3" class="champ-bawsala" placeholder="Option 4 (optionnel)" style="margin-bottom:6px;">
+            <select id="qcm-bonne-reponse" class="champ-bawsala" style="margin-bottom:8px;">
+              <option value="0">Bonne réponse : Option 1</option>
+              <option value="1">Bonne réponse : Option 2</option>
+              <option value="2">Bonne réponse : Option 3</option>
+              <option value="3">Bonne réponse : Option 4</option>
+            </select>
+          </div>
+
+          <div id="champs-code" style="display:none;">
+            <textarea id="question-code-initial" class="champ-bawsala" rows="4" placeholder="Code de départ donné à l'élève (ex: squelette à compléter)"></textarea>
+          </div>
+
+          <button id="btn-ajouter-question" class="bouton-laiton" style="margin-top:8px;"><i class="ti ti-plus"></i>Ajouter la question</button>
+        </div>
+      </div>
+
+      <div class="carte-bawsala">
+        <h5><i class="ti ti-users icone"></i>Copies des élèves</h5>
+        <button id="btn-charger-copies" class="bouton-discret" style="margin-bottom:14px;"><i class="ti ti-refresh"></i>Actualiser les copies</button>
+        <div id="liste-copies"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    const utilisateur = exigerConnexion();
+    if (!utilisateur || !['enseignant', 'super_admin'].includes(utilisateur.role)) {
+      window.location.href = '/';
+    }
+    injecterCoquille({ role: utilisateur.role, pageActuelle: '/tableau-enseignant.html', titre: 'Évaluations (DS)' });
+
+    const parametres = new URLSearchParams(window.location.search);
+    const classeId = parametres.get('classe_id');
+    let evaluationSelectionneeId = null;
+
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+
+    document.getElementById('question-type').addEventListener('change', (e) => {
+      document.getElementById('champs-qcm').style.display = e.target.value === 'qcm' ? 'block' : 'none';
+      document.getElementById('champs-code').style.display = e.target.value === 'code' ? 'block' : 'none';
+    });
+
+    let evaluationsCourantes = [];
+
+    async function chargerEvaluations() {
+      evaluationsCourantes = await appelApi(`/evaluations/classe/${classeId}`);
+      document.getElementById('liste-evaluations').innerHTML = evaluationsCourantes.map(e => `
+        <tr>
+          <td>${e.titre}</td>
+          <td>${new Date(e.date_evaluation).toLocaleString('fr-FR')}</td>
+          <td>${e.duree_minutes} min</td>
+          <td>
+            <button class="bouton-discret" onclick="selectionnerEvaluation(${e.id}, '${e.titre}')"><i class="ti ti-settings"></i>Gérer</button>
+            <button class="bouton-discret" onclick="ouvrirTiming(${e.id}, '${e.titre}')"><i class="ti ti-clock-edit"></i>Timing</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucune évaluation créée</td></tr>';
+    }
+
+    document.getElementById('btn-creer-eval').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none';
+      try {
+        await appelApi('/evaluations', {
+          method: 'POST',
+          body: JSON.stringify({
+            classe_id: classeId,
+            titre: document.getElementById('eval-titre').value,
+            date_evaluation: document.getElementById('eval-date').value,
+            duree_minutes: document.getElementById('eval-duree').value
+          })
+        });
+        document.getElementById('eval-titre').value = '';
+        document.getElementById('eval-date').value = '';
+        document.getElementById('eval-duree').value = '';
+        await chargerEvaluations();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    function ouvrirTiming(id, titre) {
+      const evaluation = evaluationsCourantes.find(e => e.id === id);
+      evaluationSelectionneeId = id;
+      document.getElementById('titre-timing').textContent = titre;
+      document.getElementById('timing-date').value = new Date(evaluation.date_evaluation).toISOString().slice(0, 16);
+      document.getElementById('timing-duree').value = evaluation.duree_minutes;
+      document.getElementById('carte-timing').style.display = 'block';
+      document.getElementById('carte-timing').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    document.getElementById('btn-enregistrer-timing').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi(`/evaluations/${evaluationSelectionneeId}/timing`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            date_evaluation: document.getElementById('timing-date').value,
+            duree_minutes: document.getElementById('timing-duree').value
+          })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Timing mis à jour.'; succesDiv.style.display = 'flex';
+        document.getElementById('carte-timing').style.display = 'none';
+        await chargerEvaluations();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    async function selectionnerEvaluation(id, titre) {
+      evaluationSelectionneeId = id;
+      document.getElementById('titre-eval-selectionnee').textContent = titre;
+      document.getElementById('section-questions').style.display = 'block';
+      await chargerQuestions();
+    }
+
+    async function chargerQuestions() {
+      const evaluation = await appelApi(`/evaluations/${evaluationSelectionneeId}`);
+      const libellesType = { qcm: 'QCM', texte_libre: 'Réponse libre', code: 'Code' };
+      document.getElementById('liste-questions').innerHTML = evaluation.questions.map(q => `
+        <tr>
+          <td>${q.enonce}</td>
+          <td><span class="badge-statut badge-confirme">${libellesType[q.type]}</span></td>
+          <td><button class="bouton-danger" onclick="supprimerQuestion(${q.id})"><i class="ti ti-trash"></i></button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucune question</td></tr>';
+    }
+
+    async function supprimerQuestion(questionId) {
+      if (!confirm('Supprimer cette question ?')) return;
+      try {
+        await appelApi(`/evaluations/${evaluationSelectionneeId}/questions/${questionId}`, { method: 'DELETE' });
+        await chargerQuestions();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    document.getElementById('btn-ajouter-question').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      const type = document.getElementById('question-type').value;
+      const enonce = document.getElementById('question-enonce').value;
+      if (!enonce) return;
+
+      const corps = { enonce, type };
+      if (type === 'qcm') {
+        corps.options = [0, 1, 2, 3]
+          .map(i => document.getElementById(`qcm-option-${i}`).value)
+          .filter(v => v.trim().length > 0);
+        corps.bonne_reponse_index = parseInt(document.getElementById('qcm-bonne-reponse').value, 10);
+      }
+      if (type === 'code') {
+        corps.code_initial = document.getElementById('question-code-initial').value;
+      }
+
+      try {
+        await appelApi(`/evaluations/${evaluationSelectionneeId}/questions`, {
+          method: 'POST',
+          body: JSON.stringify(corps)
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Question ajoutée.'; succesDiv.style.display = 'flex';
+        document.getElementById('question-enonce').value = '';
+        [0, 1, 2, 3].forEach(i => document.getElementById(`qcm-option-${i}`).value = '');
+        document.getElementById('question-code-initial').value = '';
+        await chargerQuestions();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-charger-copies').addEventListener('click', chargerCopies);
+
+    async function chargerCopies() {
+      try {
+        const copies = await appelApi(`/evaluations/${evaluationSelectionneeId}/copies`);
+        document.getElementById('liste-copies').innerHTML = copies.map(copie => `
+          <div class="carte-bawsala" style="margin-bottom:12px;">
+            <h6>${copie.nom} ${copie.prenom} — <span class="donnee-mono">QCM : ${copie.score_qcm}</span></h6>
+            <ul style="padding-left:18px;">
+              ${copie.reponses.map(r => `
+                <li style="margin-bottom:6px;">
+                  <strong>${r.enonce}</strong><br>
+                  Réponse : <span class="${r.correcte === true ? 'donnee-mono' : ''}" style="${r.correcte === true ? 'color:var(--succes)' : r.correcte === false ? 'color:var(--alerte)' : ''}">${r.reponse || '—'}</span>
+                  ${r.correcte === true ? ' ✅' : r.correcte === false ? ' ❌' : ''}
+                  ${r.flag_suspect ? ' <span class="badge-statut badge-attente">Suspect</span>' : ''}
+                </li>
+              `).join('')}
+            </ul>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="number" step="0.25" class="champ-bawsala" style="width:120px;" id="note-${copie.eleve_id}" placeholder="Note /20" value="${copie.note ?? ''}">
+              <button class="bouton-laiton" onclick="publierNote(${copie.eleve_id})"><i class="ti ti-check"></i>Publier la note</button>
+              ${copie.publie ? '<span class="badge-statut badge-confirme">Publiée</span>' : ''}
+            </div>
+          </div>
+        `).join('') || '<p style="color:var(--texte-doux)">Aucune copie pour le moment.</p>';
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function publierNote(eleveId) {
+      const note = document.getElementById(`note-${eleveId}`).value;
+      if (note === '') return;
+      try {
+        await appelApi(`/evaluations/${evaluationSelectionneeId}/notes/${eleveId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ note: parseFloat(note) })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Note publiée.'; succesDiv.style.display = 'flex';
+        await chargerCopies();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    if (!classeId) {
+      erreurDiv.textContent = 'Aucune classe sélectionnée.';
+      erreurDiv.style.display = 'block';
+    } else {
+      chargerEvaluations().then(() => {
+        const evalIdDepuisUrl = parametres.get('eval_id');
+        if (evalIdDepuisUrl) {
+          const evaluation = evaluationsCourantes.find(e => String(e.id) === evalIdDepuisUrl);
+          if (evaluation) selectionnerEvaluation(evaluation.id, evaluation.titre);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

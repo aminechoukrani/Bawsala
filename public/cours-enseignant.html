@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Cours</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-books icone"></i>Modules de cours</h4>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Titre</th><th>Matière</th><th></th></tr></thead>
+        <tbody id="liste-modules"></tbody>
+      </table>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <input id="module-titre" class="champ-bawsala" placeholder="Titre du module">
+        <button id="btn-creer-module" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-plus"></i>Créer</button>
+      </div>
+    </div>
+
+    <div id="section-pages" style="display:none;">
+      <div class="carte-bawsala">
+        <h5><i class="ti ti-file-text icone"></i>Pages du module : <span id="titre-module-selectionne"></span></h5>
+        <table class="tableau-bawsala">
+          <thead><tr><th>Titre</th><th>Statut</th><th></th></tr></thead>
+          <tbody id="liste-pages"></tbody>
+        </table>
+        <div style="margin-top:14px;">
+          <input id="page-titre" class="champ-bawsala" placeholder="Titre de la page" style="margin-bottom:8px;">
+          <textarea id="page-contenu" class="champ-bawsala" rows="6" placeholder="Contenu HTML du cours" style="margin-bottom:8px;"></textarea>
+          <button id="btn-creer-page" class="bouton-laiton"><i class="ti ti-plus"></i>Ajouter la page</button>
+        </div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:2px solid var(--creme-fonce);">
+          <h6 style="display:flex; align-items:center; gap:8px;"><i class="ti ti-copy icone"></i>Copier une page depuis un autre de tes cours</h6>
+          <div style="display:flex; gap:10px;">
+            <select id="select-page-source" class="champ-bawsala"></select>
+            <button id="btn-copier-page" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-copy"></i>Copier ici</button>
+          </div>
+        </div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:2px solid var(--creme-fonce);">
+          <h6 style="display:flex; align-items:center; gap:8px;"><i class="ti ti-sparkles icone"></i>Générer une page avec l'IA</h6>
+          <div style="display:flex; gap:10px;">
+            <input id="sujet-ia" class="champ-bawsala" placeholder="Sujet (ex: Les boucles for en Python)">
+            <button id="btn-generer-ia" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-sparkles"></i>Générer</button>
+          </div>
+          <p style="color:var(--texte-doux); font-size:0.82rem; margin-top:6px;">La page générée reste en brouillon — relis-la et publie-la depuis le tableau ci-dessus.</p>
+        </div>
+
+        <div id="carte-apercu" class="carte-bawsala" style="display:none; margin-top:16px;">
+          <h6><i class="ti ti-eye icone"></i>Aperçu</h6>
+          <div id="contenu-apercu" style="border:2px solid var(--creme-fonce); border-radius:14px; padding:16px;"></div>
+        </div>
+      </div>
+
+      <div class="carte-bawsala">
+        <h5><i class="ti ti-chart-line icone"></i>Progression des élèves</h5>
+        <table class="tableau-bawsala">
+          <thead><tr><th>Élève</th><th>Page</th><th>Vue le</th><th>Temps</th><th>Défi</th><th></th></tr></thead>
+          <tbody id="liste-progression"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('enseignant');
+    injecterCoquille({ role: 'enseignant', pageActuelle: '/tableau-enseignant.html', titre: 'Cours' });
+
+    const parametres = new URLSearchParams(window.location.search);
+    const classeId = parametres.get('classe_id');
+    let moduleSelectionneId = null;
+
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+
+    async function chargerModules() {
+      const modules = await appelApi(`/cours/classes/${classeId}/modules`);
+      document.getElementById('liste-modules').innerHTML = modules.map((m, i) => `
+        <tr>
+          <td>${m.titre}</td><td>${m.matiere}</td>
+          <td>
+            <button class="bouton-discret" ${i === 0 ? 'disabled style="opacity:0.3;"' : ''} onclick="deplacerModule(${m.id}, 'haut')"><i class="ti ti-arrow-up"></i></button>
+            <button class="bouton-discret" ${i === modules.length - 1 ? 'disabled style="opacity:0.3;"' : ''} onclick="deplacerModule(${m.id}, 'bas')"><i class="ti ti-arrow-down"></i></button>
+            <button class="bouton-discret" onclick="selectionnerModule(${m.id}, '${m.titre}')"><i class="ti ti-file-text"></i>Gérer les pages</button>
+            <button class="bouton-danger" onclick="supprimerModule(${m.id})"><i class="ti ti-trash"></i></button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucun module</td></tr>';
+    }
+
+    async function deplacerModule(moduleId, direction) {
+      try {
+        await appelApi(`/cours/modules/${moduleId}/deplacer`, { method: 'PATCH', body: JSON.stringify({ direction }) });
+        await chargerModules();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function supprimerModule(moduleId) {
+      if (!confirm('Supprimer ce module et toutes ses pages ? Cette action est irréversible.')) return;
+      try {
+        await appelApi(`/cours/modules/${moduleId}`, { method: 'DELETE' });
+        document.getElementById('section-pages').style.display = 'none';
+        await chargerModules();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function selectionnerModule(id, titre) {
+      moduleSelectionneId = id;
+      document.getElementById('titre-module-selectionne').textContent = titre;
+      document.getElementById('section-pages').style.display = 'block';
+      await chargerPages();
+      await chargerProgression();
+      await chargerMesPages();
+    }
+
+    async function chargerMesPages() {
+      const pages = await appelApi('/cours/mes-pages');
+      document.getElementById('select-page-source').innerHTML = pages.map(p =>
+        `<option value="${p.id}">${p.classe_nom} — ${p.module_titre} — ${p.page_titre}</option>`
+      ).join('') || '<option value="">Aucune page disponible</option>';
+    }
+
+    document.getElementById('btn-copier-page').addEventListener('click', async () => {
+      const pageIdSource = document.getElementById('select-page-source').value;
+      if (!pageIdSource) return;
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi(`/cours/modules/${moduleSelectionneId}/copier-page`, {
+          method: 'POST',
+          body: JSON.stringify({ page_id_source: pageIdSource })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Page copiée dans ce module.'; succesDiv.style.display = 'flex';
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    async function chargerPages() {
+      const pages = await appelApi(`/cours/modules/${moduleSelectionneId}/pages`);
+      document.getElementById('liste-pages').innerHTML = pages.map((p, i) => `
+        <tr>
+          <td>${p.titre}</td>
+          <td><span class="badge-statut ${p.valide_par_enseignant ? 'badge-confirme' : 'badge-attente'}">${p.valide_par_enseignant ? 'Publiée' : 'Brouillon'}</span></td>
+          <td>
+            <button class="bouton-discret" ${i === 0 ? 'disabled style="opacity:0.3;"' : ''} onclick="deplacerPage(${p.id}, 'haut')"><i class="ti ti-arrow-up"></i></button>
+            <button class="bouton-discret" ${i === pages.length - 1 ? 'disabled style="opacity:0.3;"' : ''} onclick="deplacerPage(${p.id}, 'bas')"><i class="ti ti-arrow-down"></i></button>
+            <button class="bouton-discret" onclick="voirApercu(${p.id})"><i class="ti ti-eye"></i></button>
+            ${!p.valide_par_enseignant ? `<button class="bouton-laiton" onclick="publierPage(${p.id})"><i class="ti ti-check"></i>Publier</button>` : ''}
+            <button class="bouton-danger" onclick="supprimerPage(${p.id})"><i class="ti ti-trash"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deplacerPage(pageId, direction) {
+      try {
+        await appelApi(`/cours/modules/${moduleSelectionneId}/pages/${pageId}/deplacer`, { method: 'PATCH', body: JSON.stringify({ direction }) });
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function voirApercu(pageId) {
+      try {
+        const page = await appelApi(`/cours/pages/${pageId}/contenu`);
+        document.getElementById('carte-apercu').style.display = 'block';
+        const zoneApercu = document.getElementById('contenu-apercu');
+
+        if (page.format_contenu === 'etapes_json') {
+          const etapes = JSON.parse(page.contenu_html);
+          zoneApercu.innerHTML = etapes.map((e, i) => `
+            <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid var(--creme-fonce);">
+              <h6><i class="ti ti-list-numbers icone"></i>Étape ${i + 1} — ${e.titre}</h6>
+              <div>${e.contenu_html}</div>
+            </div>
+          `).join('');
+        } else {
+          zoneApercu.innerHTML = page.contenu_html;
+        }
+        executerScripts(zoneApercu);
+        document.getElementById('carte-apercu').scrollIntoView({ behavior: 'smooth' });
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function publierPage(pageId) {
+      try {
+        await appelApi(`/cours/pages/${pageId}/valider`, { method: 'PATCH' });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Page publiée.'; succesDiv.style.display = 'flex';
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function supprimerPage(pageId) {
+      if (!confirm('Supprimer cette page ?')) return;
+      try {
+        await appelApi(`/cours/modules/${moduleSelectionneId}/pages/${pageId}`, { method: 'DELETE' });
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    async function chargerProgression() {
+      const progression = await appelApi(`/cours/modules/${moduleSelectionneId}/progression`);
+      document.getElementById('liste-progression').innerHTML = progression.map(p => `
+        <tr>
+          <td>${p.nom} ${p.prenom}</td><td>${p.page}</td>
+          <td>${p.premiere_vue_at ? new Date(p.premiere_vue_at).toLocaleString('fr-FR') : '—'}</td>
+          <td class="donnee-mono">${p.temps_passe_secondes || 0}s</td>
+          <td>${p.defi_complete ? '✅' : '—'}</td>
+          <td><button class="bouton-discret" onclick="telechargerPdf('/cours/modules/${moduleSelectionneId}/attestation/${p.eleve_id}')"><i class="ti ti-award"></i></button></td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('btn-creer-module').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none';
+      try {
+        await appelApi('/cours/modules', {
+          method: 'POST',
+          body: JSON.stringify({ classe_id: classeId, titre: document.getElementById('module-titre').value })
+        });
+        document.getElementById('module-titre').value = '';
+        await chargerModules();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-creer-page').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi(`/cours/modules/${moduleSelectionneId}/pages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            titre: document.getElementById('page-titre').value,
+            contenu_html: document.getElementById('page-contenu').value
+          })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Page ajoutée et publiée.'; succesDiv.style.display = 'flex';
+        document.getElementById('page-titre').value = '';
+        document.getElementById('page-contenu').value = '';
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-generer-ia').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      const sujet = document.getElementById('sujet-ia').value;
+      if (!sujet) return;
+      const bouton = document.getElementById('btn-generer-ia');
+      bouton.disabled = true;
+      bouton.innerHTML = '<i class="ti ti-loader-2"></i>Génération en cours...';
+      try {
+        await appelApi(`/cours/modules/${moduleSelectionneId}/generer-page`, {
+          method: 'POST',
+          body: JSON.stringify({ sujet })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-sparkles icone"></i>Brouillon généré ! Relis-le et publie-le ci-dessus.'; succesDiv.style.display = 'flex';
+        document.getElementById('sujet-ia').value = '';
+        await chargerPages();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+      bouton.disabled = false;
+      bouton.innerHTML = '<i class="ti ti-sparkles"></i>Générer';
+    });
+
+    if (!classeId) {
+      erreurDiv.textContent = 'Aucune classe sélectionnée.';
+      erreurDiv.style.display = 'block';
+    } else {
+      chargerModules();
+    }
+  </script>
+</body>
+</html>

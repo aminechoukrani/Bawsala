@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Enseignant</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .rangee-actions { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .rangee-actions .groupe { flex: 1; min-width: 140px; }
+    .rangee-actions label { font-size: 0.78rem; color: var(--texte-doux); font-weight: 800; display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h3><i class="ti ti-school icone"></i>Mes classes</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Nom</th><th>Niveau</th><th>Année</th><th></th></tr></thead>
+        <tbody id="liste-classes"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala" id="carte-progression" style="display:none;">
+      <h4><i class="ti ti-chart-line icone"></i>Progression — <span id="titre-classe-progression"></span></h4>
+      <div id="liste-progression-classe"></div>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5><i class="ti ti-plus icone"></i>Créer une classe</h5>
+      <p id="aucun-etablissement" class="alerte-bawsala alerte-erreur" style="display:none;">
+        <i class="ti ti-info-circle icone"></i>Aucun établissement confirmé pour l'instant — demande d'abord un rattachement.
+      </p>
+      <div id="formulaire-classe" class="rangee-actions">
+        <div class="groupe"><label>Établissement</label><select id="classe-etablissement" class="champ-bawsala"></select></div>
+        <div class="groupe"><label>Nom</label><input id="classe-nom" class="champ-bawsala" placeholder="TC-S 3"></div>
+        <div class="groupe">
+          <label>Niveau</label>
+          <select id="classe-niveau" class="champ-bawsala">
+            <option value="college">Collégial</option>
+            <option value="tronc_commun_scientifique">TC Scientifique</option>
+            <option value="tronc_commun_litteraire">TC Littéraire</option>
+          </select>
+        </div>
+        <div class="groupe"><label>Année scolaire</label><input id="classe-annee" class="champ-bawsala" placeholder="2026-2027"></div>
+        <button id="btn-creer-classe" class="bouton-laiton"><i class="ti ti-check"></i>Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('enseignant');
+    injecterCoquille({ role: 'enseignant', pageActuelle: '/tableau-enseignant.html', titre: 'Mes classes' });
+
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+
+    async function chargerEtablissements() {
+      const etablissements = await appelApi('/rattachements/mes-etablissements');
+      const select = document.getElementById('classe-etablissement');
+      const formulaire = document.getElementById('formulaire-classe');
+      const aucunDiv = document.getElementById('aucun-etablissement');
+      if (etablissements.length === 0) {
+        formulaire.style.display = 'none';
+        aucunDiv.style.display = 'flex';
+        return;
+      }
+      formulaire.style.display = 'flex';
+      aucunDiv.style.display = 'none';
+      select.innerHTML = etablissements.map(e => `<option value="${e.id}">${e.nom}</option>`).join('');
+    }
+
+    async function chargerClasses() {
+      const classes = await appelApi('/classes/mes-classes');
+      document.getElementById('liste-classes').innerHTML = classes.map(c => `
+        <tr>
+          <td>${c.nom}</td><td>${c.niveau}</td><td>${c.annee_scolaire}</td>
+          <td>
+            <a href="/gestion-eleves.html?classe_id=${c.id}" class="bouton-discret" style="text-decoration:none;"><i class="ti ti-users-group"></i>Élèves</a>
+            <a href="/cours-enseignant.html?classe_id=${c.id}" class="bouton-discret" style="text-decoration:none;"><i class="ti ti-books"></i>Cours</a>
+            <a href="/gestion-evaluations.html?classe_id=${c.id}" class="bouton-discret" style="text-decoration:none;"><i class="ti ti-clipboard-list"></i>Évaluations</a>
+            <button class="bouton-discret" onclick="voirProgression(${c.id}, '${c.nom}')"><i class="ti ti-chart-line"></i>Progression</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucune classe pour le moment</td></tr>';
+
+    }
+
+    async function voirProgression(classeId, nomClasse) {
+      const carte = document.getElementById('carte-progression');
+      document.getElementById('titre-classe-progression').textContent = nomClasse;
+      carte.style.display = 'block';
+      try {
+        const progression = await appelApi(`/cours/classes/${classeId}/progression`);
+        document.getElementById('liste-progression-classe').innerHTML = progression.map(p => {
+          const pourcentage = p.total_pages > 0 ? Math.round((p.pages_completees / p.total_pages) * 100) : 0;
+          return `
+            <div style="display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:2px solid var(--creme-fonce);">
+              <div style="min-width:140px; font-weight:800;">${p.nom} ${p.prenom}</div>
+              <div class="barre-progression-fond"><div class="barre-progression-remplissage" style="width:${pourcentage}%"></div></div>
+              <div style="min-width:50px; text-align:right; font-weight:800; color:var(--primaire-fonce);">${pourcentage}%</div>
+            </div>
+          `;
+        }).join('') || '<p style="color:var(--texte-doux)">Aucune donnée</p>';
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    document.getElementById('btn-creer-classe').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi('/classes', {
+          method: 'POST',
+          body: JSON.stringify({
+            etablissement_id: document.getElementById('classe-etablissement').value,
+            nom: document.getElementById('classe-nom').value,
+            niveau: document.getElementById('classe-niveau').value,
+            annee_scolaire: document.getElementById('classe-annee').value
+          })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Classe créée.'; succesDiv.style.display = 'flex';
+        document.getElementById('classe-nom').value = '';
+        document.getElementById('classe-annee').value = '';
+        await chargerClasses();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    (async () => { await chargerEtablissements(); await chargerClasses(); })();
+  </script>
+</body>
+</html>

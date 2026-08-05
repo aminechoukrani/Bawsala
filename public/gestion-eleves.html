@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Élèves</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .fond-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+    }
+    .fond-modal.actif { display: flex; }
+    .contenu-modal {
+      background: var(--blanc); border-radius: var(--rayon); max-width: 560px; width: 100%;
+      max-height: 85vh; overflow-y: auto; padding: 28px; position: relative;
+    }
+    .bouton-fermer-modal {
+      position: absolute; top: 16px; right: 16px; background: var(--creme-fonce); border: none;
+      border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display:flex; align-items:center; justify-content:center;
+    }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="succes" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-users icone"></i>Qui est en ligne</h4>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Élève</th><th>Statut</th><th>Activité</th></tr></thead>
+        <tbody id="liste-presence"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h4><i class="ti ti-users-group icone"></i>Élèves de la classe</h4>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Code Massar</th><th>Nom</th><th>Prénom</th><th></th></tr></thead>
+        <tbody id="liste-eleves"></tbody>
+      </table>
+
+      <div style="margin-top:16px; padding-top:16px; border-top:2px solid var(--creme-fonce);">
+        <h6 style="display:flex; align-items:center; gap:8px;"><i class="ti ti-user-plus icone"></i>Ajouter un élève manuellement</h6>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input id="eleve-massar" class="champ-bawsala" placeholder="Code Massar" style="flex:1;">
+          <input id="eleve-nom" class="champ-bawsala" placeholder="Nom" style="flex:1;">
+          <input id="eleve-prenom" class="champ-bawsala" placeholder="Prénom" style="flex:1;">
+          <input id="eleve-naissance" type="date" class="champ-bawsala" style="flex:1;">
+          <button id="btn-ajouter-eleve" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-check"></i>Ajouter</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; padding-top:16px; border-top:2px solid var(--creme-fonce);">
+        <h6 style="display:flex; align-items:center; gap:8px;"><i class="ti ti-file-spreadsheet icone"></i>Importer des élèves depuis un CSV</h6>
+        <p style="color:var(--texte-doux); font-size:0.82rem;">
+          Colonnes attendues (première ligne = en-têtes) : <span class="donnee-mono">massar_code,nom,prenom,date_naissance</span>
+          — date au format AAAA-MM-JJ.
+        </p>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input type="file" id="fichier-csv-eleves" accept=".csv" class="champ-bawsala" style="flex:1;">
+          <button id="btn-importer-csv" class="bouton-laiton" style="white-space:nowrap;"><i class="ti ti-upload"></i>Importer</button>
+        </div>
+        <div id="resultat-import-csv" style="margin-top:10px; font-size:0.85rem;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal fiche élève -->
+  <div class="fond-modal" id="fond-modal-fiche">
+    <div class="contenu-modal">
+      <button class="bouton-fermer-modal" id="btn-fermer-modal"><i class="ti ti-x"></i></button>
+      <h4 id="nom-fiche" style="margin-top:0;"></h4>
+      <p class="donnee-mono" id="massar-fiche" style="color:var(--texte-doux); margin-top:-10px;"></p>
+
+      <div id="erreur-modal" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <div id="succes-modal" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+
+      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <input id="fiche-nom" class="champ-bawsala" placeholder="Nom" style="flex:1; min-width:120px;">
+        <input id="fiche-prenom" class="champ-bawsala" placeholder="Prénom" style="flex:1; min-width:120px;">
+        <input id="fiche-naissance" type="date" class="champ-bawsala" style="flex:1; min-width:140px;">
+      </div>
+      <textarea id="fiche-remarque" class="champ-bawsala" rows="3" placeholder="Remarque (comportement, difficulté, note personnelle...)" style="margin-bottom:10px;"></textarea>
+      <button id="btn-enregistrer-fiche" class="bouton-laiton"><i class="ti ti-check"></i>Enregistrer</button>
+
+      <div style="margin-top:20px; padding-top:16px; border-top:2px solid var(--creme-fonce);">
+        <h6><i class="ti ti-chart-line icone"></i>Progression globale</h6>
+        <div id="progression-fiche" style="color:var(--texte-doux);"></div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h6><i class="ti ti-award icone"></i>Attestations par module</h6>
+        <div id="attestations-fiche"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('enseignant');
+    injecterCoquille({ role: 'enseignant', pageActuelle: '/tableau-enseignant.html', titre: 'Élèves' });
+
+    const parametres = new URLSearchParams(window.location.search);
+    const classeId = parametres.get('classe_id');
+    const erreurDiv = document.getElementById('erreur');
+    const succesDiv = document.getElementById('succes');
+
+    async function chargerPresence() {
+      try {
+        const presence = await appelApi(`/classes/${classeId}/presence`);
+        document.getElementById('liste-presence').innerHTML = presence.map(p => `
+          <tr>
+            <td>${p.nom} ${p.prenom}</td>
+            <td><span class="${p.en_ligne ? 'puce-en-ligne' : 'puce-hors-ligne'}"></span>${p.en_ligne ? 'En ligne' : 'Hors ligne'}</td>
+            <td>${p.page_titre ? `Consulte : ${p.page_titre}` : (p.derniere_activite_at ? 'Sur le menu' : 'Jamais connecté')}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucun élève dans cette classe</td></tr>';
+      } catch (err) { /* silencieux */ }
+    }
+
+    async function chargerEleves() {
+      const eleves = await appelApi(`/classes/${classeId}/eleves`);
+      window.elevesCourants = eleves;
+      document.getElementById('liste-eleves').innerHTML = eleves.map(el => `
+        <tr>
+          <td>${el.massar_code}</td><td>${el.nom}</td><td>${el.prenom}</td>
+          <td>
+            <button class="bouton-discret" onclick="ouvrirFiche(${el.id})"><i class="ti ti-id-badge-2"></i>Voir la fiche</button>
+            <button class="bouton-danger" onclick="retirerEleve(${el.id})"><i class="ti ti-trash"></i></button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucun élève dans cette classe</td></tr>';
+    }
+
+    async function retirerEleve(eleveId) {
+      if (!confirm('Retirer cet élève de la classe ?')) return;
+      try {
+        await appelApi(`/classes/${classeId}/eleves/${eleveId}`, { method: 'DELETE' });
+        await chargerEleves();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    let eleveOuvertId = null;
+
+    async function ouvrirFiche(eleveId) {
+      eleveOuvertId = eleveId;
+      const eleve = window.elevesCourants.find(e => e.id === eleveId);
+      if (!eleve) return;
+
+      document.getElementById('nom-fiche').textContent = `${eleve.nom} ${eleve.prenom}`;
+      document.getElementById('massar-fiche').textContent = eleve.massar_code;
+      document.getElementById('fiche-nom').value = eleve.nom;
+      document.getElementById('fiche-prenom').value = eleve.prenom;
+      document.getElementById('fiche-naissance').value = eleve.date_naissance.split('T')[0];
+      document.getElementById('fiche-remarque').value = eleve.remarque || '';
+      document.getElementById('erreur-modal').style.display = 'none';
+      document.getElementById('succes-modal').style.display = 'none';
+
+      document.getElementById('fond-modal-fiche').classList.add('actif');
+
+      try {
+        const progression = await appelApi(`/cours/classes/${classeId}/progression`);
+        const ligne = progression.find(p => p.eleve_id === eleveId);
+        document.getElementById('progression-fiche').textContent = ligne
+          ? `${ligne.pages_completees} / ${ligne.total_pages} pages complétées, toutes matières confondues.`
+          : 'Aucune donnée de progression pour le moment.';
+      } catch (err) { document.getElementById('progression-fiche').textContent = 'Impossible de charger la progression.'; }
+
+      try {
+        const modules = await appelApi(`/cours/classes/${classeId}/modules`);
+        document.getElementById('attestations-fiche').innerHTML = modules.map(m => `
+          <button class="bouton-discret" style="margin:3px;" onclick="telechargerPdf('/cours/modules/${m.id}/attestation/${eleveId}')">
+            <i class="ti ti-award"></i>${m.titre}
+          </button>
+        `).join('') || '<p style="color:var(--texte-doux); font-size:0.85rem;">Aucun module.</p>';
+      } catch (err) { /* silencieux */ }
+    }
+
+    document.getElementById('btn-fermer-modal').addEventListener('click', () => {
+      document.getElementById('fond-modal-fiche').classList.remove('actif');
+    });
+    document.getElementById('fond-modal-fiche').addEventListener('click', (e) => {
+      if (e.target.id === 'fond-modal-fiche') document.getElementById('fond-modal-fiche').classList.remove('actif');
+    });
+
+    document.getElementById('btn-enregistrer-fiche').addEventListener('click', async () => {
+      const erreurModalDiv = document.getElementById('erreur-modal');
+      const succesModalDiv = document.getElementById('succes-modal');
+      erreurModalDiv.style.display = 'none'; succesModalDiv.style.display = 'none';
+      try {
+        await appelApi(`/classes/${classeId}/eleves/${eleveOuvertId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            nom: document.getElementById('fiche-nom').value,
+            prenom: document.getElementById('fiche-prenom').value,
+            date_naissance: document.getElementById('fiche-naissance').value,
+            remarque: document.getElementById('fiche-remarque').value
+          })
+        });
+        succesModalDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Mis à jour.'; succesModalDiv.style.display = 'flex';
+        await chargerEleves();
+      } catch (err) { erreurModalDiv.textContent = err.message; erreurModalDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-ajouter-eleve').addEventListener('click', async () => {
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi('/comptes/eleves', {
+          method: 'POST',
+          body: JSON.stringify({
+            classe_id: classeId,
+            massar_code: document.getElementById('eleve-massar').value,
+            nom: document.getElementById('eleve-nom').value,
+            prenom: document.getElementById('eleve-prenom').value,
+            date_naissance: document.getElementById('eleve-naissance').value
+          })
+        });
+        succesDiv.innerHTML = '<i class="ti ti-confetti icone"></i>Élève ajouté.'; succesDiv.style.display = 'flex';
+        document.getElementById('eleve-massar').value = '';
+        document.getElementById('eleve-nom').value = '';
+        document.getElementById('eleve-prenom').value = '';
+        document.getElementById('eleve-naissance').value = '';
+        await chargerEleves();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    function analyserCSV(texte) {
+      const lignes = texte.trim().split(/\r?\n/);
+      const entetes = lignes[0].split(',').map(h => h.trim().toLowerCase());
+      return lignes.slice(1).filter(l => l.trim().length > 0).map(ligne => {
+        const valeurs = ligne.split(',').map(v => v.trim());
+        const obj = {};
+        entetes.forEach((h, i) => { obj[h] = valeurs[i]; });
+        return obj;
+      });
+    }
+
+    document.getElementById('btn-importer-csv').addEventListener('click', () => {
+      const fichier = document.getElementById('fichier-csv-eleves').files[0];
+      const resultatDiv = document.getElementById('resultat-import-csv');
+      if (!fichier) { resultatDiv.innerHTML = '<span style="color:var(--alerte)">Choisis un fichier CSV d\'abord.</span>'; return; }
+
+      const lecteur = new FileReader();
+      lecteur.onload = async (evenement) => {
+        const lignes = analyserCSV(evenement.target.result);
+        let reussites = 0;
+        let echecs = 0;
+        resultatDiv.innerHTML = `<span style="color:var(--texte-doux)">Import en cours...</span>`;
+
+        for (const ligne of lignes) {
+          if (!ligne.massar_code || !ligne.nom || !ligne.prenom || !ligne.date_naissance) { echecs++; continue; }
+          try {
+            await appelApi('/comptes/eleves', {
+              method: 'POST',
+              body: JSON.stringify({
+                classe_id: classeId,
+                massar_code: ligne.massar_code,
+                nom: ligne.nom,
+                prenom: ligne.prenom,
+                date_naissance: ligne.date_naissance
+              })
+            });
+            reussites++;
+          } catch (err) { echecs++; }
+        }
+
+        resultatDiv.innerHTML = `<i class="ti ti-confetti icone"></i>${reussites} élève(s) importé(s)${echecs > 0 ? `, ${echecs} échec(s)` : ''}.`;
+        document.getElementById('fichier-csv-eleves').value = '';
+        await chargerEleves();
+      };
+      lecteur.readAsText(fichier);
+    });
+
+    if (!classeId) {
+      erreurDiv.textContent = 'Aucune classe sélectionnée.';
+      erreurDiv.style.display = 'block';
+    } else {
+      chargerEleves();
+      chargerPresence();
+      setInterval(chargerPresence, 15000);
+    }
+  </script>
+</body>
+</html>

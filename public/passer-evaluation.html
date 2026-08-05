@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Évaluation</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .minuteur { font-family:'IBM Plex Mono', monospace; font-weight:800; font-size:1.4rem; color:var(--accent-fonce); }
+    .minuteur.urgent { color:var(--alerte); animation: clignoter 1s infinite; }
+    @keyframes clignoter { 50% { opacity:0.4; } }
+    .option-qcm { display:block; padding:12px 16px; border:2px solid var(--creme-fonce); border-radius:12px; margin-bottom:8px; cursor:pointer; }
+    .option-qcm:hover { border-color: var(--primaire); }
+    .option-qcm input { margin-right:10px; }
+    .nav-etapes { display:flex; justify-content:space-between; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+
+    <div id="carte-attente" class="carte-bawsala" style="display:none; text-align:center;">
+      <i class="ti ti-clock" style="font-size:48px; color:var(--texte-doux);"></i>
+      <h4 id="message-attente"></h4>
+    </div>
+
+    <div id="carte-intro" class="carte-bawsala" style="display:none;">
+      <h3 id="titre-eval" style="margin-top:0;"></h3>
+      <p style="color:var(--texte-doux);">Durée totale : <span id="duree-annoncee"></span> minutes. Tu peux revenir en arrière pour revoir tes réponses tant que tu n'as pas cliqué sur "Terminer et soumettre".</p>
+      <button id="btn-commencer" class="bouton-laiton"><i class="ti ti-player-play"></i>Commencer</button>
+    </div>
+
+    <div id="carte-question" class="carte-bawsala" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span id="compteur-question" style="font-weight:800; color:var(--texte-doux);"></span>
+        <span class="minuteur" id="minuteur"></span>
+      </div>
+      <h5 id="enonce-question"></h5>
+      <div id="zone-reponse" style="margin:16px 0;"></div>
+      <div class="nav-etapes">
+        <button id="btn-precedent" class="bouton-discret"><i class="ti ti-arrow-left"></i>Précédent</button>
+        <button id="btn-suivant" class="bouton-laiton"><i class="ti ti-arrow-right"></i>Suivant</button>
+      </div>
+    </div>
+
+    <div id="carte-fin" class="carte-bawsala" style="display:none; text-align:center;">
+      <i class="ti ti-confetti" style="font-size:48px; color:var(--succes);"></i>
+      <h4>Évaluation terminée !</h4>
+      <p style="color:var(--texte-doux);">Ta copie a été transmise à ton enseignant. Tu recevras ta note une fois publiée.</p>
+      <a href="/tableau-eleve.html" class="bouton-laiton" style="text-decoration:none;">Retour à mes cours</a>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('eleve');
+    injecterCoquille({ role: 'eleve', pageActuelle: '/tableau-eleve.html', titre: t('mes_cours') });
+
+    const parametres = new URLSearchParams(window.location.search);
+    const evaluationId = parametres.get('evaluation_id');
+    const erreurDiv = document.getElementById('erreur');
+
+    let evaluation = null;
+    let indexQuestion = 0;
+    let reponsesLocales = {};
+    let tempsParQuestion = {};
+    let heureDebutQuestion = null;
+    let minuteurInterval = null;
+    let finFixeMs = null;
+
+    async function chargerEvaluation() {
+      try {
+        evaluation = await appelApi(`/evaluations/${evaluationId}/pour-eleve`);
+
+        if (evaluation.deja_soumis) {
+          document.getElementById('carte-attente').style.display = 'block';
+          document.getElementById('message-attente').textContent = 'Tu as déjà soumis cette évaluation. Ta note apparaîtra sur ton tableau de bord une fois publiée.';
+          return;
+        }
+
+        if (evaluation.statut_temporel === 'a_venir') {
+          document.getElementById('carte-attente').style.display = 'block';
+          document.getElementById('message-attente').textContent =
+            `Cette évaluation n'est pas encore ouverte. Elle commence le ${new Date(evaluation.date_evaluation).toLocaleString('fr-FR')}.`;
+          return;
+        }
+
+        if (evaluation.statut_temporel === 'termine') {
+          document.getElementById('carte-attente').style.display = 'block';
+          document.getElementById('message-attente').textContent = "Le temps imparti pour cette évaluation est écoulé.";
+          return;
+        }
+
+        finFixeMs = new Date(evaluation.date_fin).getTime();
+        document.getElementById('carte-intro').style.display = 'block';
+        document.getElementById('titre-eval').textContent = evaluation.titre;
+        document.getElementById('duree-annoncee').textContent = evaluation.duree_minutes;
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    }
+
+    document.getElementById('btn-commencer').addEventListener('click', () => {
+      document.getElementById('carte-intro').style.display = 'none';
+      document.getElementById('carte-question').style.display = 'block';
+      demarrerMinuteur();
+      afficherQuestion(0);
+    });
+
+    function demarrerMinuteur() {
+      const affichage = document.getElementById('minuteur');
+      minuteurInterval = setInterval(() => {
+        const secondesRestantes = Math.round((finFixeMs - Date.now()) / 1000);
+        if (secondesRestantes <= 0) {
+          clearInterval(minuteurInterval);
+          affichage.textContent = '0:00';
+          soumettreEvaluation();
+          return;
+        }
+        const minutes = Math.floor(secondesRestantes / 60);
+        const secondes = secondesRestantes % 60;
+        affichage.textContent = `${minutes}:${secondes.toString().padStart(2, '0')}`;
+        affichage.classList.toggle('urgent', secondesRestantes <= 60);
+      }, 1000);
+    }
+
+    function sauvegarderReponseActuelle() {
+      const question = evaluation.questions[indexQuestion];
+      let valeur;
+      if (question.type === 'qcm') {
+        const coche = document.querySelector('input[name="reponse-qcm"]:checked');
+        valeur = coche ? coche.value : '';
+      } else {
+        valeur = document.getElementById('champ-reponse').value;
+      }
+      reponsesLocales[question.id] = valeur;
+      const tempsEcoule = Math.round((Date.now() - heureDebutQuestion) / 1000);
+      tempsParQuestion[question.id] = (tempsParQuestion[question.id] || 0) + tempsEcoule;
+    }
+
+    function afficherQuestion(index) {
+      indexQuestion = index;
+      heureDebutQuestion = Date.now();
+      const question = evaluation.questions[index];
+      document.getElementById('compteur-question').textContent = `Question ${index + 1} / ${evaluation.questions.length}`;
+      document.getElementById('enonce-question').textContent = question.enonce;
+
+      const reponsePrecedente = reponsesLocales[question.id];
+      const zone = document.getElementById('zone-reponse');
+
+      if (question.type === 'qcm') {
+        const options = question.parametres_variantes.options || [];
+        zone.innerHTML = options.map((opt, i) => `
+          <label class="option-qcm">
+            <input type="radio" name="reponse-qcm" value="${i}" ${String(i) === reponsePrecedente ? 'checked' : ''}> ${opt}
+          </label>
+        `).join('');
+      } else if (question.type === 'code') {
+        const valeurDepart = reponsePrecedente !== undefined ? reponsePrecedente : (question.parametres_variantes.code_initial || '');
+        zone.innerHTML = `<textarea id="champ-reponse" class="champ-bawsala" rows="8" style="font-family:monospace;">${valeurDepart}</textarea>`;
+      } else {
+        zone.innerHTML = `<textarea id="champ-reponse" class="champ-bawsala" rows="5" placeholder="Ta réponse...">${reponsePrecedente || ''}</textarea>`;
+      }
+
+      document.getElementById('btn-precedent').style.display = index === 0 ? 'none' : 'inline-flex';
+      const estDerniere = index === evaluation.questions.length - 1;
+      document.getElementById('btn-suivant').innerHTML = estDerniere
+        ? '<i class="ti ti-check"></i>Terminer et soumettre'
+        : '<i class="ti ti-arrow-right"></i>Suivant';
+    }
+
+    document.getElementById('btn-suivant').addEventListener('click', () => {
+      sauvegarderReponseActuelle();
+      if (indexQuestion < evaluation.questions.length - 1) {
+        afficherQuestion(indexQuestion + 1);
+      } else {
+        soumettreEvaluation();
+      }
+    });
+
+    document.getElementById('btn-precedent').addEventListener('click', () => {
+      sauvegarderReponseActuelle();
+      afficherQuestion(indexQuestion - 1);
+    });
+
+    async function soumettreEvaluation() {
+      clearInterval(minuteurInterval);
+      const reponses = evaluation.questions.map(q => ({
+        question_id: q.id,
+        reponse: reponsesLocales[q.id] !== undefined ? reponsesLocales[q.id] : '',
+        temps_reponse_secondes: tempsParQuestion[q.id] || 0
+      }));
+
+      try {
+        await appelApi(`/evaluations/${evaluationId}/soumettre`, {
+          method: 'POST',
+          body: JSON.stringify({ reponses })
+        });
+      } catch (err) { /* si déjà soumis ou erreur réseau, on affiche quand même la fin pour ne pas bloquer l'élève */ }
+
+      document.getElementById('carte-question').style.display = 'none';
+      document.getElementById('carte-fin').style.display = 'block';
+    }
+
+    chargerEvaluation();
+  </script>
+</body>
+</html>

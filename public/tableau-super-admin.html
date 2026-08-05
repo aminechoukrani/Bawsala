@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Super Admin</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .rangee-actions { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .rangee-actions .groupe { flex: 1; min-width: 140px; }
+    .rangee-actions label { font-size: 0.78rem; color: var(--texte-doux); display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Rattachements à confirmer</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Enseignant</th><th>Établissement</th><th>Accepté par l'enseignant</th><th></th></tr></thead>
+        <tbody id="liste-rattachements-attente"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Modifications à confirmer</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Type</th><th>Détails</th><th>Accepté par l'enseignant</th><th></th></tr></thead>
+        <tbody id="liste-modifications-attente"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Établissements</h3>
+      <div id="erreur-etab" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Nom</th><th>Ville</th></tr></thead>
+        <tbody id="liste-etablissements"></tbody>
+      </table>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5 style="margin-top:0;">Créer un établissement</h5>
+      <div class="rangee-actions">
+        <div class="groupe"><input id="nouveau-etab-nom" class="champ-bawsala" placeholder="Nom"></div>
+        <div class="groupe"><input id="nouveau-etab-ville" class="champ-bawsala" placeholder="Ville"></div>
+        <button id="btn-creer-etab" class="bouton-laiton">Créer</button>
+      </div>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5 style="margin-top:0;">Créer un compte Admin</h5>
+      <div id="erreur-admin" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <div id="succes-admin" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+      <div class="rangee-actions">
+        <div class="groupe"><input id="admin-nom" class="champ-bawsala" placeholder="Nom"></div>
+        <div class="groupe"><input id="admin-email" class="champ-bawsala" placeholder="Email"></div>
+        <div class="groupe"><input id="admin-password" type="password" class="champ-bawsala" placeholder="Mot de passe"></div>
+        <div class="groupe"><select id="admin-etablissement" class="champ-bawsala"></select></div>
+        <button id="btn-creer-admin" class="bouton-laiton">Créer</button>
+      </div>
+    </div>
+
+    <div class="carte-bawsala">
+      <h5 style="margin-top:0;">Ajouter un enseignant directement (rattaché et confirmé immédiatement)</h5>
+      <div id="erreur-enseignant" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+      <div id="succes-enseignant" class="alerte-bawsala alerte-succes" style="display:none;"></div>
+      <div class="rangee-actions">
+        <div class="groupe"><input id="ens-nom" class="champ-bawsala" placeholder="Nom"></div>
+        <div class="groupe"><input id="ens-email" class="champ-bawsala" placeholder="Email"></div>
+        <div class="groupe"><input id="ens-password" type="password" class="champ-bawsala" placeholder="Mot de passe"></div>
+        <div class="groupe"><select id="ens-etablissement" class="champ-bawsala"></select></div>
+        <button id="btn-creer-enseignant" class="bouton-laiton">Créer</button>
+      </div>
+    </div>
+
+    <div class="carte-bawsala">
+      <h3 style="margin-top:0;">Toutes les classes</h3>
+      <table class="tableau-bawsala">
+        <thead><tr><th>Établissement</th><th>Classe</th><th>Enseignant</th><th></th></tr></thead>
+        <tbody id="liste-toutes-classes"></tbody>
+      </table>
+      <div id="carte-eleves-classe" style="margin-top:16px; display:none;">
+        <h5>Élèves — <span id="titre-classe-eleves"></span></h5>
+        <table class="tableau-bawsala">
+          <thead><tr><th>Code Massar</th><th>Nom</th><th>Prénom</th></tr></thead>
+          <tbody id="liste-eleves-classe"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    exigerConnexion('super_admin');
+    injecterCoquille({ role: 'super_admin', pageActuelle: '/tableau-super-admin.html', titre: 'Établissements' });
+
+    async function chargerEtablissements() {
+      const etablissements = await appelApi('/etablissements');
+      document.getElementById('liste-etablissements').innerHTML = etablissements.map(e =>
+        `<tr><td>${e.nom}</td><td>${e.ville || '-'}</td></tr>`
+      ).join('') || '<tr><td colspan="2" style="color:var(--texte-doux)">Aucun établissement</td></tr>';
+
+      const optionsHtml = etablissements.map(e => `<option value="${e.id}">${e.nom}</option>`).join('');
+      document.getElementById('admin-etablissement').innerHTML = optionsHtml;
+      document.getElementById('ens-etablissement').innerHTML = optionsHtml;
+    }
+
+    async function chargerToutesClasses() {
+      const classes = await appelApi('/classes');
+      document.getElementById('liste-toutes-classes').innerHTML = classes.map(c => `
+        <tr>
+          <td>${c.etablissement_nom}</td><td>${c.nom} (${c.niveau})</td><td>${c.enseignant_nom}</td>
+          <td><button class="bouton-discret" onclick="voirElevesClasse(${c.id}, '${c.nom}')">Voir les élèves</button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucune classe</td></tr>';
+    }
+
+    async function voirElevesClasse(classeId, nomClasse) {
+      const carte = document.getElementById('carte-eleves-classe');
+      document.getElementById('titre-classe-eleves').textContent = nomClasse;
+      carte.style.display = 'block';
+      const eleves = await appelApi(`/classes/${classeId}/eleves`);
+      document.getElementById('liste-eleves-classe').innerHTML = eleves.map(el => `
+        <tr><td>${el.massar_code}</td><td>${el.nom}</td><td>${el.prenom}</td></tr>
+      `).join('') || '<tr><td colspan="3" style="color:var(--texte-doux)">Aucun élève</td></tr>';
+    }
+
+    document.getElementById('btn-creer-etab').addEventListener('click', async () => {
+      const erreurDiv = document.getElementById('erreur-etab');
+      erreurDiv.style.display = 'none';
+      try {
+        await appelApi('/etablissements', {
+          method: 'POST',
+          body: JSON.stringify({
+            nom: document.getElementById('nouveau-etab-nom').value,
+            ville: document.getElementById('nouveau-etab-ville').value
+          })
+        });
+        document.getElementById('nouveau-etab-nom').value = '';
+        document.getElementById('nouveau-etab-ville').value = '';
+        await chargerEtablissements();
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-creer-admin').addEventListener('click', async () => {
+      const erreurDiv = document.getElementById('erreur-admin');
+      const succesDiv = document.getElementById('succes-admin');
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi('/comptes/admins', {
+          method: 'POST',
+          body: JSON.stringify({
+            nom: document.getElementById('admin-nom').value,
+            email: document.getElementById('admin-email').value,
+            password: document.getElementById('admin-password').value,
+            etablissement_id: document.getElementById('admin-etablissement').value
+          })
+        });
+        succesDiv.textContent = 'Compte admin créé.'; succesDiv.style.display = 'block';
+        document.getElementById('admin-nom').value = '';
+        document.getElementById('admin-email').value = '';
+        document.getElementById('admin-password').value = '';
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    document.getElementById('btn-creer-enseignant').addEventListener('click', async () => {
+      const erreurDiv = document.getElementById('erreur-enseignant');
+      const succesDiv = document.getElementById('succes-enseignant');
+      erreurDiv.style.display = 'none'; succesDiv.style.display = 'none';
+      try {
+        await appelApi('/comptes/enseignants', {
+          method: 'POST',
+          body: JSON.stringify({
+            nom: document.getElementById('ens-nom').value,
+            email: document.getElementById('ens-email').value,
+            password: document.getElementById('ens-password').value,
+            etablissement_id: document.getElementById('ens-etablissement').value
+          })
+        });
+        succesDiv.textContent = 'Enseignant créé et rattaché.'; succesDiv.style.display = 'block';
+        document.getElementById('ens-nom').value = '';
+        document.getElementById('ens-email').value = '';
+        document.getElementById('ens-password').value = '';
+      } catch (err) { erreurDiv.textContent = err.message; erreurDiv.style.display = 'block'; }
+    });
+
+    async function chargerRattachementsAttente() {
+      const rattachements = await appelApi('/rattachements/attente-superadmin');
+      document.getElementById('liste-rattachements-attente').innerHTML = rattachements.map(r => `
+        <tr>
+          <td>${r.enseignant_nom} (${r.email})</td>
+          <td>${r.etablissement_nom}</td>
+          <td>${r.accepte_par_enseignant ? '✅' : '⏳'}</td>
+          <td><button class="bouton-laiton" onclick="confirmerRattachement(${r.id})">Confirmer</button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucun rattachement en attente</td></tr>';
+    }
+
+    async function confirmerRattachement(id) {
+      await appelApi(`/rattachements/${id}/confirmer-superadmin`, { method: 'PATCH' });
+      await chargerRattachementsAttente();
+    }
+
+    async function chargerModificationsAttente() {
+      const modifications = await appelApi('/modifications/attente-superadmin');
+      document.getElementById('liste-modifications-attente').innerHTML = modifications.map(m => `
+        <tr>
+          <td>${m.type_cible === 'enseignant_info' ? 'Enseignant' : 'Classe'}</td>
+          <td class="donnee-mono">${JSON.stringify(JSON.parse(m.donnees_proposees))}</td>
+          <td>${m.accepte_par_enseignant ? '✅' : '⏳'}</td>
+          <td><button class="bouton-laiton" onclick="confirmerModification(${m.id})">Confirmer</button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" style="color:var(--texte-doux)">Aucune modification en attente</td></tr>';
+    }
+
+    async function confirmerModification(id) {
+      await appelApi(`/modifications/${id}/confirmer-superadmin`, { method: 'PATCH' });
+      await chargerModificationsAttente();
+    }
+
+    chargerEtablissements();
+    chargerToutesClasses();
+    chargerRattachementsAttente();
+    chargerModificationsAttente();
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS presence_eleve (
+  eleve_id INT PRIMARY KEY,
+  classe_id INT NOT NULL,
+  page_id INT NULL,
+  derniere_activite_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (eleve_id) REFERENCES eleves(id) ON DELETE CASCADE,
+  FOREIGN KEY (classe_id) REFERENCES classes(id) ON DELETE CASCADE,
+  FOREIGN KEY (page_id) REFERENCES pages_cours(id) ON DELETE SET NULL
+);

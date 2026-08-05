@@ -1,0 +1,11 @@
+body {
+  background-color: #f8f9fa;
+}
+.carte {
+  max-width: 480px;
+  margin: 80px auto;
+}
+.tableau {
+  max-width: 900px;
+  margin: 40px auto;
+}

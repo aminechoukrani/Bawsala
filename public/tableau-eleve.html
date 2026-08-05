@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bawsala — Élève</title>
+  <link href="/css/design-system.css" rel="stylesheet">
+  <style>
+    .grille-modules { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:18px; }
+    .carte-module {
+      background: var(--blanc); border-radius: var(--rayon); box-shadow: var(--ombre);
+      border: 2px solid var(--creme-fonce); padding: 20px; display:flex; flex-direction:column; align-items:center;
+      text-align:center; transition: transform 0.15s ease;
+    }
+    .carte-module:hover { transform: translateY(-3px); }
+    .anneau-progression { position:relative; width:100px; height:100px; margin-bottom:12px; }
+    .anneau-progression svg { transform: rotate(-90deg); }
+    .anneau-progression .pourcentage {
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Fredoka', sans-serif; font-weight:700; font-size:1.3rem; color:var(--primaire-fonce);
+    }
+    .nom-classe-tag {
+      font-size:0.72rem; font-weight:800; color:var(--texte-doux); text-transform:uppercase;
+      background: var(--creme-fonce); padding:3px 10px; border-radius:20px; margin-bottom:8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="contenu-original">
+    <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="contenu-classes"></div>
+  </div>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    const utilisateurConnecte = exigerConnexion('eleve');
+    injecterCoquille({ role: 'eleve', pageActuelle: '/tableau-eleve.html', titre: t('mes_cours') });
+    const erreurDiv = document.getElementById('erreur');
+
+    function anneauSVG(pourcentage) {
+      const rayon = 42;
+      const circonference = 2 * Math.PI * rayon;
+      const decalage = circonference * (1 - pourcentage / 100);
+      const idDegrade = 'degrade' + Math.round(Math.random() * 100000);
+      return `
+        <div class="anneau-progression">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#14B8A6"/>
+                <stop offset="100%" stop-color="#7C3AED"/>
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="${rayon}" stroke="#F0EEE6" stroke-width="9" fill="none"/>
+            <circle cx="50" cy="50" r="${rayon}" stroke="url(#${idDegrade})" stroke-width="9" fill="none"
+              stroke-dasharray="${circonference}" stroke-dashoffset="${decalage}" stroke-linecap="round"/>
+          </svg>
+          <div class="pourcentage">${pourcentage}%</div>
+        </div>
+      `;
+    }
+
+    async function chargerTout() {
+      try {
+        const classes = await appelApi('/classes/mes-classes-eleve');
+        window.mesClasseIds = classes.map(c => c.id);
+        const conteneur = document.getElementById('contenu-classes');
+        conteneur.innerHTML = '';
+
+        if (classes.length === 0) {
+          conteneur.innerHTML = `<div class="carte-bawsala" style="color:var(--texte-doux)">${t('aucune_classe')}</div>`;
+          return;
+        }
+
+        const grille = document.createElement('div');
+        grille.className = 'grille-modules';
+        conteneur.appendChild(grille);
+
+        for (const classe of classes) {
+          const modules = await appelApi(`/cours/classes/${classe.id}/modules`);
+
+          for (const module of modules) {
+            const progression = await appelApi(`/cours/modules/${module.id}/ma-progression`);
+            const pourcentage = progression.total_pages > 0
+              ? Math.round((progression.pages_completees / progression.total_pages) * 100)
+              : 0;
+
+            const pages = await appelApi(`/cours/modules/${module.id}/pages`);
+            const premierePage = pages[0];
+
+            const carte = document.createElement('div');
+            carte.className = 'carte-module';
+            carte.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <div class="nom-classe-tag">${classe.nom}</div>
+                <button class="bouton-discret" style="padding:5px 8px;" onclick="telechargerPdf('/cours/modules/${module.id}/attestation/${utilisateurConnecte.id}')" title="Télécharger mon attestation">
+                  <i class="ti ti-award"></i>
+                </button>
+              </div>
+              ${anneauSVG(pourcentage)}
+              <h6 style="margin:6px 0 4px 0;">${module.titre}</h6>
+              <p style="color:var(--texte-doux); font-size:0.82rem; margin:0 0 12px 0;">
+                ${progression.pages_completees} / ${progression.total_pages} ${t('pages_completees')}
+              </p>
+              ${premierePage
+                ? `<a href="/page-eleve.html?page_id=${premierePage.id}&classe_id=${classe.id}&module_id=${module.id}"
+                     class="bouton-laiton" style="text-decoration:none; width:100%; justify-content:center;">
+                     <i class="ti ti-player-play"></i>${pourcentage > 0 ? t('continuer') : t('commencer')}
+                   </a>`
+                : `<span style="color:var(--texte-doux); font-size:0.82rem;">${t('aucune_page')}</span>`
+              }
+            `;
+            grille.appendChild(carte);
+          }
+        }
+
+        if (grille.children.length === 0) {
+          conteneur.innerHTML = `<div class="carte-bawsala" style="color:var(--texte-doux)">${t('aucun_module')}</div>`;
+        }
+      } catch (err) {
+        erreurDiv.textContent = err.message;
+        erreurDiv.style.display = 'block';
+      }
+    }
+
+    async function envoyerPresence() {
+      for (const classeId of (window.mesClasseIds || [])) {
+        try {
+          await appelApi('/cours/presence', { method: 'POST', body: JSON.stringify({ classe_id: classeId, page_id: null }) });
+        } catch (err) { /* silencieux */ }
+      }
+    }
+
+    chargerTout().then(() => {
+      envoyerPresence();
+      setInterval(envoyerPresence, 20000);
+    });
+  </script>
+</body>
+</html>
