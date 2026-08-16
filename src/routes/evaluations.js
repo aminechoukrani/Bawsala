@@ -47,12 +47,15 @@ router.get('/classe/:classeId/eleve', verifierToken, autoriserRoles('eleve'), as
   try {
     const [rows] = await pool.query(
       `SELECT e.id, e.titre, e.date_evaluation, e.duree_minutes, e.statut,
-              n.note, n.publie
+              n.note, n.publie,
+              EXISTS(
+                SELECT 1 FROM reponses_eleves r WHERE r.evaluation_id = e.id AND r.eleve_id = ?
+              ) AS deja_soumis
        FROM evaluations e
        LEFT JOIN notes n ON n.evaluation_id = e.id AND n.eleve_id = ?
        WHERE e.classe_id = ?
        ORDER BY e.date_evaluation DESC`,
-      [req.user.id, req.params.classeId]
+      [req.user.id, req.user.id, req.params.classeId]
     );
     res.json(rows);
   } catch (err) {

@@ -37,7 +37,8 @@ const TRADUCTIONS = {
     mes_evaluations: 'Mes évaluations', aucune_evaluation: 'Aucune évaluation pour le moment.',
     col_titre: 'Titre', col_classe: 'Classe', col_debut: 'Début', col_duree: 'Durée', col_statut: 'Statut',
     statut_a_venir: 'À venir', statut_en_cours: 'En cours', statut_termine: 'Terminé',
-    passer_examen: "Passer l'examen", note_label: 'Note', en_attente_correction: 'En attente de correction'
+    passer_examen: "Passer l'examen", note_label: 'Note', en_attente_correction: 'En attente de correction',
+    non_soumis: 'Non soumis'
   },
   en: {
     mes_cours: 'My courses', continuer: 'Continue', commencer: 'Start',
@@ -51,7 +52,8 @@ const TRADUCTIONS = {
     mes_evaluations: 'My evaluations', aucune_evaluation: 'No evaluation yet.',
     col_titre: 'Title', col_classe: 'Class', col_debut: 'Start', col_duree: 'Duration', col_statut: 'Status',
     statut_a_venir: 'Upcoming', statut_en_cours: 'Ongoing', statut_termine: 'Finished',
-    passer_examen: 'Take the exam', note_label: 'Grade', en_attente_correction: 'Awaiting grading'
+    passer_examen: 'Take the exam', note_label: 'Grade', en_attente_correction: 'Awaiting grading',
+    non_soumis: 'Not submitted'
   },
   ar: {
     mes_cours: 'دروسي', continuer: 'متابعة', commencer: 'ابدأ',
@@ -65,7 +67,8 @@ const TRADUCTIONS = {
     mes_evaluations: 'تقييماتي', aucune_evaluation: 'لا يوجد تقييم بعد.',
     col_titre: 'العنوان', col_classe: 'الفصل', col_debut: 'البداية', col_duree: 'المدة', col_statut: 'الحالة',
     statut_a_venir: 'قادم', statut_en_cours: 'جارٍ', statut_termine: 'منتهٍ',
-    passer_examen: 'إجراء الامتحان', note_label: 'العلامة', en_attente_correction: 'في انتظار التصحيح'
+    passer_examen: 'إجراء الامتحان', note_label: 'العلامة', en_attente_correction: 'في انتظار التصحيح',
+    non_soumis: 'لم يتم التسليم'
   }
 };
 

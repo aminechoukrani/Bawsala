@@ -138,12 +138,16 @@
       const texteBadge = statutCle === 'a_venir' ? t('statut_a_venir') : (statutCle === 'en_cours' ? t('statut_en_cours') : t('statut_termine'));
 
       let action;
-      if (statutCle === 'en_cours' && !e.deja_soumis) {
+      if (statutCle === 'en_cours' && e.deja_soumis) {
+        action = `<span style="color:var(--texte-doux);">${t('en_attente_correction')}</span>`;
+      } else if (statutCle === 'en_cours' && !e.deja_soumis) {
         action = `<a href="/passer-evaluation.html?evaluation_id=${e.id}" class="bouton-laiton" style="text-decoration:none;"><i class="ti ti-player-play"></i>${t('passer_examen')}</a>`;
       } else if (statutCle === 'termine' && e.publie) {
         action = `<span style="font-weight:800; color:var(--primaire-fonce);">${t('note_label')} : ${e.note}</span>`;
-      } else if (statutCle === 'termine') {
+      } else if (statutCle === 'termine' && e.deja_soumis) {
         action = `<span style="color:var(--texte-doux);">${t('en_attente_correction')}</span>`;
+      } else if (statutCle === 'termine' && !e.deja_soumis) {
+        action = `<span style="color:var(--alerte);">${t('non_soumis')}</span>`;
       } else {
         action = '';
       }
@@ -172,7 +176,12 @@
         }
 
         if (toutes.length === 0) {
-          conteneurEval.innerHTML = '';
+          conteneurEval.innerHTML = `
+            <div class="carte-bawsala" style="margin-bottom:24px; color:var(--texte-doux);">
+              <h4><i class="ti ti-clipboard-list icone"></i>${t('mes_evaluations')}</h4>
+              <p style="margin:0;">${t('aucune_evaluation')}</p>
+            </div>
+          `;
           return;
         }
 
