@@ -28,6 +28,7 @@
 <body>
   <div id="contenu-original">
     <div id="erreur" class="alerte-bawsala alerte-erreur" style="display:none;"></div>
+    <div id="section-evaluations"></div>
     <div id="contenu-classes"></div>
   </div>
 
@@ -64,6 +65,7 @@
       try {
         const classes = await appelApi('/classes/mes-classes-eleve');
         window.mesClasseIds = classes.map(c => c.id);
+        chargerEvaluations(classes);
         const conteneur = document.getElementById('contenu-classes');
         conteneur.innerHTML = '';
 
@@ -117,6 +119,79 @@
         if (grille.children.length === 0) {
           conteneur.innerHTML = `<div class="carte-bawsala" style="color:var(--texte-doux)">${t('aucun_module')}</div>`;
         }
+      } catch (err) {
+        erreurDiv.textContent = err.message;
+        erreurDiv.style.display = 'block';
+      }
+    }
+
+    function statutTemporelDe(evaluation) {
+      const debut = new Date(evaluation.date_evaluation).getTime();
+      const fin = debut + evaluation.duree_minutes * 60000;
+      const maintenant = Date.now();
+      return maintenant < debut ? 'a_venir' : (maintenant > fin ? 'termine' : 'en_cours');
+    }
+
+    function ligneEvaluation(e) {
+      const statutCle = statutTemporelDe(e);
+      const classeBadge = statutCle === 'a_venir' ? 'badge-attente' : (statutCle === 'en_cours' ? 'badge-confirme' : 'badge-refuse');
+      const texteBadge = statutCle === 'a_venir' ? t('statut_a_venir') : (statutCle === 'en_cours' ? t('statut_en_cours') : t('statut_termine'));
+
+      let action;
+      if (statutCle === 'en_cours' && !e.deja_soumis) {
+        action = `<a href="/passer-evaluation.html?evaluation_id=${e.id}" class="bouton-laiton" style="text-decoration:none;"><i class="ti ti-player-play"></i>${t('passer_examen')}</a>`;
+      } else if (statutCle === 'termine' && e.publie) {
+        action = `<span style="font-weight:800; color:var(--primaire-fonce);">${t('note_label')} : ${e.note}</span>`;
+      } else if (statutCle === 'termine') {
+        action = `<span style="color:var(--texte-doux);">${t('en_attente_correction')}</span>`;
+      } else {
+        action = '';
+      }
+
+      const langueLocale = recupererLangue() === 'ar' ? 'ar-MA' : (recupererLangue() === 'en' ? 'en-US' : 'fr-FR');
+
+      return `
+        <tr>
+          <td>${e.titre}</td>
+          <td>${e.classe_nom}</td>
+          <td>${new Date(e.date_evaluation).toLocaleString(langueLocale)}</td>
+          <td>${e.duree_minutes} min</td>
+          <td><span class="badge-statut ${classeBadge}">${texteBadge}</span></td>
+          <td>${action}</td>
+        </tr>
+      `;
+    }
+
+    async function chargerEvaluations(classes) {
+      const conteneurEval = document.getElementById('section-evaluations');
+      try {
+        let toutes = [];
+        for (const classe of classes) {
+          const evals = await appelApi(`/evaluations/classe/${classe.id}/eleve`);
+          toutes = toutes.concat(evals.map(e => ({ ...e, classe_nom: classe.nom })));
+        }
+
+        if (toutes.length === 0) {
+          conteneurEval.innerHTML = '';
+          return;
+        }
+
+        toutes.sort((a, b) => new Date(a.date_evaluation) - new Date(b.date_evaluation));
+
+        conteneurEval.innerHTML = `
+          <div class="carte-bawsala" style="margin-bottom:24px;">
+            <h4><i class="ti ti-clipboard-list icone"></i>${t('mes_evaluations')}</h4>
+            <table class="tableau-bawsala">
+              <thead>
+                <tr>
+                  <th>${t('col_titre')}</th><th>${t('col_classe')}</th><th>${t('col_debut')}</th>
+                  <th>${t('col_duree')}</th><th>${t('col_statut')}</th><th></th>
+                </tr>
+              </thead>
+              <tbody>${toutes.map(ligneEvaluation).join('')}</tbody>
+            </table>
+          </div>
+        `;
       } catch (err) {
         erreurDiv.textContent = err.message;
         erreurDiv.style.display = 'block';

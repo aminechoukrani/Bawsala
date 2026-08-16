@@ -33,7 +33,11 @@ const TRADUCTIONS = {
     precedent: 'Précédent', suivant: 'Suivant', termine: "J'ai terminé cette page",
     progression_enregistree: 'Progression enregistrée ! On passe à la suite...',
     aucune_page: 'Aucune page disponible',
-    traduction_en_cours: 'Traduction en cours, merci de patienter...'
+    traduction_en_cours: 'Traduction en cours, merci de patienter...',
+    mes_evaluations: 'Mes évaluations', aucune_evaluation: 'Aucune évaluation pour le moment.',
+    col_titre: 'Titre', col_classe: 'Classe', col_debut: 'Début', col_duree: 'Durée', col_statut: 'Statut',
+    statut_a_venir: 'À venir', statut_en_cours: 'En cours', statut_termine: 'Terminé',
+    passer_examen: "Passer l'examen", note_label: 'Note', en_attente_correction: 'En attente de correction'
   },
   en: {
     mes_cours: 'My courses', continuer: 'Continue', commencer: 'Start',
@@ -43,7 +47,11 @@ const TRADUCTIONS = {
     precedent: 'Previous', suivant: 'Next', termine: 'I finished this page',
     progression_enregistree: 'Progress saved! Moving to the next part...',
     aucune_page: 'No page available',
-    traduction_en_cours: 'Translating, please wait...'
+    traduction_en_cours: 'Translating, please wait...',
+    mes_evaluations: 'My evaluations', aucune_evaluation: 'No evaluation yet.',
+    col_titre: 'Title', col_classe: 'Class', col_debut: 'Start', col_duree: 'Duration', col_statut: 'Status',
+    statut_a_venir: 'Upcoming', statut_en_cours: 'Ongoing', statut_termine: 'Finished',
+    passer_examen: 'Take the exam', note_label: 'Grade', en_attente_correction: 'Awaiting grading'
   },
   ar: {
     mes_cours: 'دروسي', continuer: 'متابعة', commencer: 'ابدأ',
@@ -53,7 +61,11 @@ const TRADUCTIONS = {
     precedent: 'السابق', suivant: 'التالي', termine: 'أنهيت هذه الصفحة',
     progression_enregistree: 'تم حفظ التقدم! ننتقل إلى الجزء التالي...',
     aucune_page: 'لا توجد صفحة متاحة',
-    traduction_en_cours: 'جارٍ الترجمة، يرجى الانتظار...'
+    traduction_en_cours: 'جارٍ الترجمة، يرجى الانتظار...',
+    mes_evaluations: 'تقييماتي', aucune_evaluation: 'لا يوجد تقييم بعد.',
+    col_titre: 'العنوان', col_classe: 'الفصل', col_debut: 'البداية', col_duree: 'المدة', col_statut: 'الحالة',
+    statut_a_venir: 'قادم', statut_en_cours: 'جارٍ', statut_termine: 'منتهٍ',
+    passer_examen: 'إجراء الامتحان', note_label: 'العلامة', en_attente_correction: 'في انتظار التصحيح'
   }
 };
 
