@@ -77,7 +77,12 @@
     champIdentifiant.addEventListener('input', () => {
       const valeur = champIdentifiant.value.trim();
       erreurDiv.style.display = 'none';
-      if (valeur.length === 0) { zoneSecret.style.display = 'none'; return; }
+      if (valeur.length === 0) {
+        zoneSecret.style.display = 'none';
+        clearTimeout(minuteurDebounce);
+        chargementDiv.style.display = 'none';
+        return;
+      }
       zoneSecret.style.display = 'block';
       if (estEmail(valeur)) {
         labelSecret.innerHTML = '<i class="ti ti-lock icone"></i>Mot de passe';
@@ -127,7 +132,14 @@
       if (e.key === 'Enter') { clearTimeout(minuteurDebounce); tenterConnexion(champSecretMdp.value); }
     });
     champSecretDate.addEventListener('change', () => {
-      if (champSecretDate.value) tenterConnexion(champSecretDate.value);
+      clearTimeout(minuteurDebounce);
+      if (champSecretDate.value) {
+        chargementDiv.style.display = 'block';
+        chargementDiv.innerHTML = '<span style="color:var(--texte-doux); font-size:0.85rem;"><i class="ti ti-clock icone"></i> Vérification dans un instant...</span>';
+        minuteurDebounce = setTimeout(() => tenterConnexion(champSecretDate.value), 4000);
+      } else {
+        chargementDiv.style.display = 'none';
+      }
     });
   </script>
 </body>
