@@ -182,6 +182,8 @@
 
     async function soumettreEvaluation() {
       clearInterval(minuteurInterval);
+      const boutonSuivant = document.getElementById('btn-suivant');
+      boutonSuivant.disabled = true;
       const reponses = evaluation.questions.map(q => ({
         question_id: q.id,
         reponse: reponsesLocales[q.id] !== undefined ? reponsesLocales[q.id] : '',
@@ -193,7 +195,16 @@
           method: 'POST',
           body: JSON.stringify({ reponses })
         });
-      } catch (err) { /* si déjà soumis ou erreur réseau, on affiche quand même la fin pour ne pas bloquer l'élève */ }
+      } catch (err) {
+        if (err.status !== 409) {
+          erreurDiv.textContent = 'La soumission a échoué (' + err.message + '). Vérifie ta connexion et réessaie — tes réponses sont conservées.';
+          erreurDiv.style.display = 'block';
+          boutonSuivant.disabled = false;
+          boutonSuivant.innerHTML = '<i class="ti ti-refresh"></i>Réessayer la soumission';
+          return;
+        }
+        // 409 : déjà soumis, cas inoffensif (ex. double-clic) — on continue vers l'écran de fin
+      }
 
       document.getElementById('carte-question').style.display = 'none';
       document.getElementById('carte-fin').style.display = 'block';

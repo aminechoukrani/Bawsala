@@ -123,7 +123,11 @@ async function appelApi(chemin, options = {}) {
 
   const reponse = await fetch(`/api${chemin}`, { ...options, headers: entetes });
   const donnees = await reponse.json().catch(() => ({}));
-  if (!reponse.ok) throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
+  if (!reponse.ok) {
+    const erreur = new Error(donnees.erreur || `Erreur ${reponse.status}`);
+    erreur.status = reponse.status;
+    throw erreur;
+  }
   return donnees;
 }
 
